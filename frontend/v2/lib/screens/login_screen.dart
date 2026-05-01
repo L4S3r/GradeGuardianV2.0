@@ -10,21 +10,8 @@ class LoginScreen extends StatefulWidget {
   State<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen>
-    with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabController = TabController(length: 2, vsync: this);
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
+class _LoginScreenState extends State<LoginScreen> {
+  int _selectedForm = 0; // 0 = Sign In, 1 = Register
 
   @override
   Widget build(BuildContext context) {
@@ -66,40 +53,46 @@ class _LoginScreenState extends State<LoginScreen>
               ),
               const SizedBox(height: 36),
 
-              // ── Tabs ───────────────────────────────────────────────────
-              Container(
-                decoration: BoxDecoration(
-                  color: AppTheme.cardBorder.withOpacity(0.4),
-                  borderRadius: AppTheme.radiusMd,
-                ),
-                child: TabBar(
-                  controller: _tabController,
-                  indicator: BoxDecoration(
-                    color: AppTheme.primary,
-                    borderRadius: AppTheme.radiusMd,
+              // ── Buttons ────────────────────────────────────────────────
+              Row(
+                children: [
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => setState(() => _selectedForm = 0),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _selectedForm == 0 ? AppTheme.primary : Colors.white,
+                        foregroundColor: _selectedForm == 0 ? Colors.white : AppTheme.textSecondary,
+                        side: BorderSide(
+                          color: _selectedForm == 0 ? AppTheme.primary : AppTheme.cardBorder,
+                        ),
+                      ),
+                      child: const Text('Sign In'),
+                    ),
                   ),
-                  labelColor: Colors.white,
-                  unselectedLabelColor: AppTheme.textSecondary,
-                  labelStyle: const TextStyle(fontWeight: FontWeight.w700, fontSize: 14),
-                  dividerColor: Colors.transparent,
-                  tabs: const [
-                    Tab(text: 'Sign In'),
-                    Tab(text: 'Register'),
-                  ],
-                ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: ElevatedButton(
+                      onPressed: () => setState(() => _selectedForm = 1),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _selectedForm == 1 ? AppTheme.primary : Colors.white,
+                        foregroundColor: _selectedForm == 1 ? Colors.white : AppTheme.textSecondary,
+                        side: BorderSide(
+                          color: _selectedForm == 1 ? AppTheme.primary : AppTheme.cardBorder,
+                        ),
+                      ),
+                      child: const Text('Register'),
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 28),
 
               // ── Forms ──────────────────────────────────────────────────
               SizedBox(
                 height: 440,
-                child: TabBarView(
-                  controller: _tabController,
-                  children: const [
-                    _LoginForm(),
-                    _RegisterForm(),
-                  ],
-                ),
+                child: _selectedForm == 0
+                    ? const _LoginForm()
+                    : const _RegisterForm(),
               ),
             ],
           ),
