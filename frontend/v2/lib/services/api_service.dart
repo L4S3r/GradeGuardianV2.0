@@ -125,6 +125,22 @@ class ApiService {
     throw Exception('Failed to submit batch grades: $errorDetail');
   }
 
+  Future<GradeRecord> updateGrade(String gradeId, double newGrade, String newLetterGrade) async {
+    final response = await http.put(
+      Uri.parse('$baseUrl/grades/$gradeId'),
+      headers: _headers,
+      body: jsonEncode({
+        'grade': newGrade,
+        'letter_grade': newLetterGrade,
+      }),
+    );
+    
+    if (response.statusCode == 200) {
+      return GradeRecord.fromJson(jsonDecode(response.body));
+    }
+    throw Exception('Failed to update grade: ${response.body}');
+  }
+
   Future<Map<String, dynamic>> verifyGrade(String gradeId) async {
     final results = await verifyMultipleGrades([gradeId]);
     if (results.isNotEmpty) {

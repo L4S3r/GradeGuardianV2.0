@@ -133,6 +133,27 @@ class GradeProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> updateGrade({
+    required String gradeId,
+    required double newGrade,
+    required String newLetterGrade,
+  }) async {
+    try {
+      final updatedGrade = await _apiService.updateGrade(gradeId, newGrade, newLetterGrade);
+      final index = _grades.indexWhere((g) => g.id == gradeId);
+      if (index != -1) {
+        _grades[index] = updatedGrade;
+        notifyListeners();
+      }
+      return true;
+    } catch (e, st) {
+      debugPrint('updateGrade error: $e\n$st');
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> verifyAllGrades() async {
     if (_grades.isEmpty) return;
     _isVerifying = true;

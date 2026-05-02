@@ -20,6 +20,8 @@ class _GradesScreenState extends State<GradesScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSearching = false;
   Timer? _debounce;
+  String _selectedCourseFilter = 'All Courses';
+  String _selectedSortOption = 'Date (Newest)';
 
   @override
   void initState() {
@@ -303,6 +305,27 @@ Widget build(BuildContext context) {
       );
     }
 
+    // Extract unique courses for the dropdown filter
+    final uniqueCourses = ['All Courses', ...provider.grades.map((g) => g.courseCode).toSet().toList()..sort()];
+    if (!uniqueCourses.contains(_selectedCourseFilter)) {
+      _selectedCourseFilter = 'All Courses'; // Reset if course is no longer available
+    }
+
+    // Apply local filters and sorting
+    var displayGrades = provider.grades.toList();
+    
+    if (_selectedCourseFilter != 'All Courses') {
+      displayGrades = displayGrades.where((g) => g.courseCode == _selectedCourseFilter).toList();
+    }
+
+    if (_selectedSortOption == 'Grade (High to Low)') {
+      displayGrades.sort((a, b) => b.grade.compareTo(a.grade));
+    } else if (_selectedSortOption == 'Student ID (A-Z)') {
+      displayGrades.sort((a, b) => a.studentId.compareTo(b.studentId));
+    } else {
+      displayGrades.sort((a, b) => b.recordedAt.compareTo(a.recordedAt));
+    }
+
     return RefreshIndicator(
       onRefresh: () => provider.refresh(studentId: widget.studentId),
       child: Column(
@@ -328,25 +351,95 @@ Widget build(BuildContext context) {
               ),
             ),
           
+          // Filter & Sort Toolbar
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+            child: Row(
+              children: [
+                Expanded(
+                  flex: 1,
+                  child: DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Course Filter',
+                      filled: true,
+                      fillColor: Theme.of(context).colorScheme.surface,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Theme.of(context).dividerColor),
+                      ),
+                    ),
+                    value: _selectedCourseFilter,
+                    isExpanded: true,
+                    icon: const Icon(Icons.filter_list, size: 16),
+                    items: uniqueCourses.map((c) => DropdownMenuItem(
+                      value: c, 
+                      child: Text(c, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
+                    )).toList(),
+                    onChanged: (val) => setState(() => _selectedCourseFilter = val!),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 1,
+                  child: DropdownButtonFormField<String>(
+                    decoration: InputDecoration(
+                      labelText: 'Sort By',
+                      filled: true,
+                      fillColor: Theme.of(context).colorScheme.surface,
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                        borderSide: BorderSide(color: Theme.of(context).dividerColor),
+                      ),
+                    ),
+                    value: _selectedSortOption,
+                    isExpanded: true,
+                    icon: const Icon(Icons.sort, size: 16),
+                    items: ['Date (Newest)', 'Grade (High to Low)', 'Student ID (A-Z)']
+                        .map((s) => DropdownMenuItem(
+                          value: s, 
+                          child: Text(s, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
+                        )).toList(),
+                    onChanged: (val) => setState(() => _selectedSortOption = val!),
+                  ),
+                ),
+              ],
+            ),
+          ),
+
           // Grades list
           Expanded(
-            child: ListView.builder(
-              padding: const EdgeInsets.only(top: 8, bottom: 16),
-              itemCount: provider.grades.length,
-              itemBuilder: (context, index) {
-                final grade = provider.grades[index];
-                return GradeCard(
-                  grade: grade,
-                  onRetryVerification: () {
-                    provider.verifySingleGrade(grade.id);
-                  },
-                  onTap: () {
-                    // Navigate to grade detail screen
-                    // Navigator.push(context, ...);
-                  },
-                );
-              },
-            ),
+            child: displayGrades.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.filter_list_off, size: 48, color: Theme.of(context).hintColor.withOpacity(0.5)),
+                        const SizedBox(height: 16),
+                        Text('No grades match your filters', style: Theme.of(context).textTheme.titleMedium),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    padding: const EdgeInsets.only(top: 8, bottom: 16),
+                    itemCount: displayGrades.length,
+                    itemBuilder: (context, index) {
+                      final grade = displayGrades[index];
+                      return GradeCard(
+                        grade: grade,
+                        onRetryVerification: () {
+                          provider.verifySingleGrade(grade.id);
+                        },
+                        onTap: () {
+                          // Navigate to grade detail screen
+                          // Navigator.push(context, ...);
+                        },
+                      );
+                    },
+                  ),
           ),
         ],
       ),

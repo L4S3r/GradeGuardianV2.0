@@ -7,7 +7,7 @@ import 'providers/auth_provider.dart';
 import 'providers/grade_provider.dart';
 import 'providers/theme_provider.dart';
 import 'screens/grades_screen.dart';
-import 'screens/stats_screen.dart';
+import 'screens/dashboard_screen.dart';
 import 'screens/student_profile_screen.dart';
 import 'screens/login_screen.dart';
 import 'theme/app_theme.dart';
@@ -123,13 +123,18 @@ class _AppShellState extends State<_AppShell> {
   @override
   Widget build(BuildContext context) {
     final professor = context.watch<AuthProvider>().professor!;
+    final authToken = context.watch<AuthProvider>().token ?? '';
+    final baseUrl = context.read<ApiService>().baseUrl;
 
     return Scaffold(
       body: IndexedStack(
         index: _currentIndex,
         children: [
           const GradesScreen(studentId: null),
-          const StatsScreen(),
+          DashboardScreen(
+            authToken: authToken,
+            baseUrl: baseUrl,
+          ),
           ProfessorProfileScreen(
             name:        professor.name,
             employeeId:  professor.employeeId,

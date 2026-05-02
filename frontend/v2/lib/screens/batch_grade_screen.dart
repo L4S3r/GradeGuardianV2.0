@@ -155,10 +155,16 @@ class _BatchGradeScreenState extends State<BatchGradeScreen> {
                 ? const Center(child: CircularProgressIndicator())
                 : DropdownButtonFormField<CourseModel>(
                     value: _selectedCourse,
+                    isExpanded: true,
                     decoration: const InputDecoration(
                       labelText: 'Select Course for Batch Entry',
                       filled: true,
                     ),
+                    selectedItemBuilder: (BuildContext context) {
+                      return _courses!.map<Widget>((c) {
+                        return Text(c.displayName, overflow: TextOverflow.ellipsis);
+                      }).toList();
+                    },
                     items: _courses!.map((c) => DropdownMenuItem(
                           value: c,
                           child: Text(c.displayName),

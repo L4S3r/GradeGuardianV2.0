@@ -221,10 +221,16 @@ Future<void> _saveGrade() async {
                     Expanded(
                       child: DropdownButtonFormField<CourseModel>(
                         value: _selectedCourse,
+                        isExpanded: true,
                         decoration: const InputDecoration(labelText: 'Course'),
+                        selectedItemBuilder: (BuildContext context) {
+                          return _courses!.map<Widget>((c) {
+                            return Text(c.displayName, overflow: TextOverflow.ellipsis);
+                          }).toList();
+                        },
                         items: _courses!.map((c) => DropdownMenuItem(
                           value: c,
-                          child: Text(c.displayName, overflow: TextOverflow.ellipsis),
+                          child: Text(c.displayName),
                         )).toList(),
                         onChanged: (val) => setState(() => _selectedCourse = val),
                         validator: (v) => v == null ? 'Please select or add a course' : null,

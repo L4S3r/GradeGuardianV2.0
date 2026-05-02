@@ -64,6 +64,7 @@ class _GpaSummaryCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final gpa = provider.gpa;
+    // ignore: unused_local_variable
     final gpaColor = _gpaColor(gpa);
 
     return Container(
