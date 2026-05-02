@@ -110,6 +110,14 @@ class GradeDB(Base):
     recorded_at  = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     hash         = Column(String)
 
+class CourseDB(Base):
+    __tablename__ = "courses"
+    id           = Column(String, primary_key=True, index=True)
+    professor_id = Column(String, ForeignKey("professors.id"), index=True)
+    course_code  = Column(String, index=True)
+    course_name  = Column(String)
+    created_at   = Column(DateTime, default=lambda: datetime.now(timezone.utc))
+
 
 class AuditLogDB(Base):
     __tablename__ = "audit_logs"
@@ -185,6 +193,18 @@ class GradeResponse(GradeCreate):
     original_letter_grade: Optional[str] = None  # Original letter grade before tampering
     is_verified:  bool = Field(default=True)
     model_config  = ConfigDict(from_attributes=True)
+
+class CourseCreate(BaseModel):
+    course_code: str
+    course_name: str
+
+class CourseResponse(CourseCreate):
+    id:           str
+    professor_id: str
+    model_config  = ConfigDict(from_attributes=True)
+
+class BatchGradeCreate(BaseModel):
+    grades: List[GradeCreate]
 
 class AuditLogResponse(BaseModel):
     grade_id:      str
@@ -372,6 +392,36 @@ async def create_grade(
     db.refresh(db_grade)
     return db_grade
 
+@app.post("/grades/batch", response_model=List[GradeResponse], status_code=201)
+async def create_batch_grades(
+    batch_data: BatchGradeCreate,
+    db: Session = Depends(get_db),
+    current: ProfessorDB = Depends(get_current_professor),
+):
+    now = datetime.now(timezone.utc)
+    created_grades = []
+
+    for grade_data in batch_data.grades:
+        new_id = str(uuid.uuid4())
+        db_grade = GradeDB(
+            id           = new_id,
+            professor_id = current.id,
+            student_id   = grade_data.student_id,
+            course_name  = grade_data.course_name,
+            course_code  = grade_data.course_code,
+            grade        = grade_data.grade,
+            original_grade = grade_data.grade,
+            original_letter_grade = grade_data.letter_grade,
+            letter_grade = grade_data.letter_grade,
+            recorded_at  = now,
+        )
+        data_to_hash   = build_grade_data_string(new_id, grade_data.student_id, grade_data.course_code, grade_data.grade, grade_data.letter_grade, now.isoformat())
+        db_grade.hash  = compute_hash(data_to_hash)
+        db.add(db_grade)
+        created_grades.append(db_grade)
+
+    db.commit()
+    return created_grades
 
 @app.post("/repair/{grade_id}", response_model=GradeResponse)
 async def repair_grade(
@@ -486,6 +536,26 @@ async def get_professor_statistics(
             for code, data in course_map.items()
         }
     }
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 7.  COURSE ENDPOINTS (professor-scoped)
+# ─────────────────────────────────────────────────────────────────────────────
+@app.get("/courses", response_model=List[CourseResponse])
+async def get_courses(db: Session = Depends(get_db), current: ProfessorDB = Depends(get_current_professor)):
+    return db.query(CourseDB).filter(CourseDB.professor_id == current.id).all()
+
+@app.post("/courses", response_model=CourseResponse, status_code=201)
+async def create_course(
+    course_data: CourseCreate,
+    db: Session = Depends(get_db),
+    current: ProfessorDB = Depends(get_current_professor)
+):
+    new_course = CourseDB(id=str(uuid.uuid4()), professor_id=current.id, **course_data.model_dump())
+    db.add(new_course)
+    db.commit()
+    db.refresh(new_course)
+    return new_course
+
 
 @app.get("/")
 async def root():
