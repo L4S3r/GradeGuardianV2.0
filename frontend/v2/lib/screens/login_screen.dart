@@ -17,7 +17,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.background,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 40),
@@ -61,10 +61,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: ElevatedButton(
                       onPressed: () => setState(() => _selectedForm = 0),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _selectedForm == 0 ? AppTheme.primary : Colors.white,
-                        foregroundColor: _selectedForm == 0 ? Colors.white : AppTheme.textSecondary,
+                        backgroundColor: _selectedForm == 0 ? AppTheme.primary : Theme.of(context).cardColor,
+                        foregroundColor: _selectedForm == 0 ? Colors.white : Theme.of(context).hintColor,
                         side: BorderSide(
-                          color: _selectedForm == 0 ? AppTheme.primary : AppTheme.cardBorder,
+                          color: _selectedForm == 0 ? AppTheme.primary : Theme.of(context).dividerColor,
                         ),
                       ),
                       child: const Text('Sign In'),
@@ -75,10 +75,10 @@ class _LoginScreenState extends State<LoginScreen> {
                     child: ElevatedButton(
                       onPressed: () => setState(() => _selectedForm = 1),
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: _selectedForm == 1 ? AppTheme.primary : Colors.white,
-                        foregroundColor: _selectedForm == 1 ? Colors.white : AppTheme.textSecondary,
+                        backgroundColor: _selectedForm == 1 ? AppTheme.primary : Theme.of(context).cardColor,
+                        foregroundColor: _selectedForm == 1 ? Colors.white : Theme.of(context).hintColor,
                         side: BorderSide(
-                          color: _selectedForm == 1 ? AppTheme.primary : AppTheme.cardBorder,
+                          color: _selectedForm == 1 ? AppTheme.primary : Theme.of(context).dividerColor,
                         ),
                       ),
                       child: const Text('Register'),

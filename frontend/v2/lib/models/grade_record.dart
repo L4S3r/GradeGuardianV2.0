@@ -9,6 +9,7 @@ class GradeRecord extends Equatable {
   final String courseCode;
   final double grade;
   final double? originalGrade;  // Original grade before any tampering
+  final String? originalLetterGrade; // Original letter grade before any tampering
   final String letterGrade;
   final DateTime recordedAt;
   final String hash;
@@ -22,6 +23,7 @@ class GradeRecord extends Equatable {
     required this.courseCode,
     required this.grade,
     this.originalGrade,
+    this.originalLetterGrade,
     required this.letterGrade,
     required this.recordedAt,
     required this.hash,
@@ -40,6 +42,7 @@ class GradeRecord extends Equatable {
       courseCode: json['course_code'] ?? 'N/A',
       grade: (json['grade'] as num?)?.toDouble() ?? 0.0,
       originalGrade: (json['original_grade'] as num?)?.toDouble(),
+      originalLetterGrade: json['original_letter_grade'],
       letterGrade: json['letter_grade'] ?? 'F',
       recordedAt: json['recorded_at'] != null 
           ? DateTime.parse(json['recorded_at']) 
@@ -64,6 +67,7 @@ class GradeRecord extends Equatable {
       'course_code': courseCode,
       'grade': grade,
       'original_grade': originalGrade,
+      'original_letter_grade': originalLetterGrade,
       'letter_grade': letterGrade,
       'recorded_at': recordedAt.toIso8601String(),
       'hash': hash,
@@ -80,6 +84,7 @@ class GradeRecord extends Equatable {
     String? courseCode,
     double? grade,
     double? originalGrade,
+    String? originalLetterGrade,
     String? letterGrade,
     DateTime? recordedAt,
     String? hash,
@@ -93,6 +98,7 @@ class GradeRecord extends Equatable {
       courseCode: courseCode ?? this.courseCode,
       grade: grade ?? this.grade,
       originalGrade: originalGrade ?? this.originalGrade,
+      originalLetterGrade: originalLetterGrade ?? this.originalLetterGrade,
       letterGrade: letterGrade ?? this.letterGrade,
       recordedAt: recordedAt ?? this.recordedAt,
       hash: hash ?? this.hash,
@@ -114,6 +120,7 @@ class GradeRecord extends Equatable {
         courseCode,
         grade,
         originalGrade,
+        originalLetterGrade,
         letterGrade,
         recordedAt,
         hash,

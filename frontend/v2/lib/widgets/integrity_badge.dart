@@ -18,35 +18,38 @@ class IntegrityBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     if (isVerifying) {
-      return _buildVerifyingState();
+      return _buildVerifyingState(isDark);
     }
 
     if (isVerified) {
-      return _buildVerifiedState(context);
+      return _buildVerifiedState(context, isDark);
     }
 
-    return _buildTamperedState(context);
+    return _buildTamperedState(context, isDark);
   }
 
-  Widget _buildVerifyingState() {
+  Widget _buildVerifyingState(bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.blue.shade50,
+        color: isDark ? Colors.blue.withOpacity(0.15) : Colors.blue.shade50,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.blue.shade200),
+        border: Border.all(color: isDark ? Colors.blue.shade400.withOpacity(0.5) : Colors.blue.shade200),
       ),
-      child: const Row(
+      child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          CircularShimmer(size: 16),
-          SizedBox(width: 8),
+          const CircularShimmer(size: 16),
+          const SizedBox(width: 8),
           Text(
             'Verifying...',
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
+              color: isDark ? Colors.blue.shade300 : null,
             ),
           ),
         ],
@@ -54,27 +57,27 @@ class IntegrityBadge extends StatelessWidget {
     );
   }
 
-  Widget _buildVerifiedState(BuildContext context) {
+  Widget _buildVerifiedState(BuildContext context, bool isDark) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
       decoration: BoxDecoration(
-        color: Colors.green.shade50,
+        color: isDark ? Colors.green.withOpacity(0.15) : Colors.green.shade50,
         borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: Colors.green.shade200),
+        border: Border.all(color: isDark ? Colors.green.shade400.withOpacity(0.5) : Colors.green.shade200),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(
             Icons.verified_user,
-            color: Colors.green.shade700,
+            color: isDark ? Colors.green.shade400 : Colors.green.shade700,
             size: 18,
           ),
           const SizedBox(width: 6),
           Text(
             'Verified',
             style: TextStyle(
-              color: Colors.green.shade700,
+              color: isDark ? Colors.green.shade400 : Colors.green.shade700,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -84,29 +87,29 @@ class IntegrityBadge extends StatelessWidget {
     );
   }
 
-  Widget _buildTamperedState(BuildContext context) {
+  Widget _buildTamperedState(BuildContext context, bool isDark) {
     return GestureDetector(
       onTap: onRetry,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.red.shade50,
+          color: isDark ? Colors.red.withOpacity(0.15) : Colors.red.shade50,
           borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: Colors.red.shade300, width: 1.5),
+          border: Border.all(color: isDark ? Colors.red.shade400.withOpacity(0.5) : Colors.red.shade300, width: 1.5),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               Icons.report_problem,
-              color: Colors.red.shade700,
+              color: isDark ? Colors.red.shade400 : Colors.red.shade700,
               size: 18,
             ),
             const SizedBox(width: 6),
             Text(
               'Tamper Detected',
               style: TextStyle(
-                color: Colors.red.shade700,
+                color: isDark ? Colors.red.shade400 : Colors.red.shade700,
                 fontSize: 12,
                 fontWeight: FontWeight.w700,
               ),
@@ -115,7 +118,7 @@ class IntegrityBadge extends StatelessWidget {
               const SizedBox(width: 4),
               Icon(
                 Icons.refresh,
-                color: Colors.red.shade700,
+                color: isDark ? Colors.red.shade400 : Colors.red.shade700,
                 size: 14,
               ),
             ],
@@ -143,24 +146,26 @@ class IntegrityBadgeLarge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     if (isVerifying) {
-      return _buildVerifyingCard();
+      return _buildVerifyingCard(isDark);
     }
 
     if (isVerified) {
-      return _buildVerifiedCard();
+      return _buildVerifiedCard(isDark);
     }
 
-    return _buildTamperedCard(context);
+    return _buildTamperedCard(context, isDark);
   }
 
-  Widget _buildVerifyingCard() {
+  Widget _buildVerifyingCard(bool isDark) {
     return Card(
-      color: Colors.blue.shade50,
+      color: isDark ? Colors.blue.withOpacity(0.1) : Colors.blue.shade50,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.blue.shade200, width: 2),
+        side: BorderSide(color: isDark ? Colors.blue.shade400.withOpacity(0.4) : Colors.blue.shade200, width: 2),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -177,7 +182,7 @@ class IntegrityBadgeLarge extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Colors.blue.shade900,
+                      color: isDark ? Colors.blue.shade300 : Colors.blue.shade900,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -185,7 +190,7 @@ class IntegrityBadgeLarge extends StatelessWidget {
                     'Checking grade record hash...',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.blue.shade700,
+                      color: isDark ? Colors.blue.shade400.withOpacity(0.8) : Colors.blue.shade700,
                     ),
                   ),
                 ],
@@ -197,13 +202,13 @@ class IntegrityBadgeLarge extends StatelessWidget {
     );
   }
 
-  Widget _buildVerifiedCard() {
+  Widget _buildVerifiedCard(bool isDark) {
     return Card(
-      color: Colors.green.shade50,
+      color: isDark ? Colors.green.withOpacity(0.1) : Colors.green.shade50,
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.green.shade300, width: 2),
+        side: BorderSide(color: isDark ? Colors.green.shade400.withOpacity(0.4) : Colors.green.shade300, width: 2),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -212,12 +217,12 @@ class IntegrityBadgeLarge extends StatelessWidget {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(
-                color: Colors.green.shade100,
+                color: isDark ? Colors.green.withOpacity(0.1) : Colors.green.shade100,
                 shape: BoxShape.circle,
               ),
               child: Icon(
                 Icons.verified_user,
-                color: Colors.green.shade700,
+                color: isDark ? Colors.green.shade400 : Colors.green.shade700,
                 size: 32,
               ),
             ),
@@ -231,7 +236,7 @@ class IntegrityBadgeLarge extends StatelessWidget {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: Colors.green.shade900,
+                      color: isDark ? Colors.green.shade300 : Colors.green.shade900,
                     ),
                   ),
                   const SizedBox(height: 4),
@@ -239,7 +244,7 @@ class IntegrityBadgeLarge extends StatelessWidget {
                     'This grade record has not been tampered with',
                     style: TextStyle(
                       fontSize: 14,
-                      color: Colors.green.shade700,
+                      color: isDark ? Colors.green.shade400.withOpacity(0.8) : Colors.green.shade700,
                     ),
                   ),
                 ],
@@ -251,14 +256,14 @@ class IntegrityBadgeLarge extends StatelessWidget {
     );
   }
 
-  Widget _buildTamperedCard(BuildContext context) {
+  Widget _buildTamperedCard(BuildContext context, bool isDark) {
     return Card(
-      color: Colors.red.shade50,
+      color: isDark ? Colors.red.withOpacity(0.1) : Colors.red.shade50,
       elevation: 4,
-      shadowColor: Colors.red.shade200,
+      shadowColor: isDark ? Colors.black : Colors.red.shade200,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: Colors.red.shade400, width: 2),
+        side: BorderSide(color: isDark ? Colors.red.shade400.withOpacity(0.5) : Colors.red.shade400, width: 2),
       ),
       child: Padding(
         padding: const EdgeInsets.all(16.0),
@@ -270,12 +275,12 @@ class IntegrityBadgeLarge extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.all(12),
                   decoration: BoxDecoration(
-                    color: Colors.red.shade100,
+                    color: isDark ? Colors.red.withOpacity(0.1) : Colors.red.shade100,
                     shape: BoxShape.circle,
                   ),
                   child: Icon(
                     Icons.report_problem,
-                    color: Colors.red.shade700,
+                    color: isDark ? Colors.red.shade400 : Colors.red.shade700,
                     size: 32,
                   ),
                 ),
@@ -289,7 +294,7 @@ class IntegrityBadgeLarge extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.bold,
-                          color: Colors.red.shade900,
+                          color: isDark ? Colors.red.shade300 : Colors.red.shade900,
                         ),
                       ),
                       const SizedBox(height: 4),
@@ -297,7 +302,7 @@ class IntegrityBadgeLarge extends StatelessWidget {
                         'This grade record may have been modified',
                         style: TextStyle(
                           fontSize: 14,
-                          color: Colors.red.shade700,
+                          color: isDark ? Colors.red.shade400.withOpacity(0.8) : Colors.red.shade700,
                         ),
                       ),
                     ],
@@ -310,14 +315,14 @@ class IntegrityBadgeLarge extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  color: Colors.red.shade100,
+                  color: isDark ? Colors.black26 : Colors.red.shade100,
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Text(
                   errorMessage!,
                   style: TextStyle(
                     fontSize: 12,
-                    color: Colors.red.shade900,
+                    color: isDark ? Colors.red.shade300 : Colors.red.shade900,
                     fontFamily: 'monospace',
                   ),
                 ),
@@ -332,8 +337,8 @@ class IntegrityBadgeLarge extends StatelessWidget {
                   icon: const Icon(Icons.refresh),
                   label: const Text('Retry Verification'),
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.red.shade700,
-                    side: BorderSide(color: Colors.red.shade400),
+                    foregroundColor: isDark ? Colors.red.shade400 : Colors.red.shade700,
+                    side: BorderSide(color: isDark ? Colors.red.shade400.withOpacity(0.6) : Colors.red.shade400),
                   ),
                 ),
               ),

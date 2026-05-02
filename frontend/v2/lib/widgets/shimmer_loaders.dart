@@ -10,22 +10,27 @@ class GradeCardShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
+    final highlightColor = isDark ? Colors.grey.shade700 : Colors.grey.shade100;
+    final cardColor = Theme.of(context).cardTheme.color ?? (isDark ? Colors.grey.shade900 : Colors.white);
+
     return ListView.builder(
       itemCount: count,
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      itemBuilder: (_, __) => _buildShimmerCard(),
+      itemBuilder: (_, __) => _buildShimmerCard(baseColor, highlightColor, cardColor),
     );
   }
 
-  Widget _buildShimmerCard() {
+  Widget _buildShimmerCard(Color baseColor, Color highlightColor, Color cardColor) {
     return Shimmer.fromColors(
-      baseColor: Colors.grey.shade300,
-      highlightColor: Colors.grey.shade100,
+      baseColor: baseColor,
+      highlightColor: highlightColor,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: cardColor,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Column(
@@ -39,7 +44,7 @@ class GradeCardShimmer extends StatelessWidget {
                   child: Container(
                     height: 16,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: baseColor,
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -49,7 +54,7 @@ class GradeCardShimmer extends StatelessWidget {
                   width: 50,
                   height: 40,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: baseColor,
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
@@ -63,7 +68,7 @@ class GradeCardShimmer extends StatelessWidget {
                   width: 80,
                   height: 28,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: baseColor,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -72,7 +77,7 @@ class GradeCardShimmer extends StatelessWidget {
                   width: 100,
                   height: 6,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: baseColor,
                     borderRadius: BorderRadius.circular(3),
                   ),
                 ),
@@ -86,7 +91,7 @@ class GradeCardShimmer extends StatelessWidget {
                   width: 120,
                   height: 14,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: baseColor,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -95,7 +100,7 @@ class GradeCardShimmer extends StatelessWidget {
                   width: 80,
                   height: 14,
                   decoration: BoxDecoration(
-                    color: Colors.grey.shade300,
+                    color: baseColor,
                     borderRadius: BorderRadius.circular(4),
                   ),
                 ),
@@ -118,14 +123,18 @@ class ButtonShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
+    final highlightColor = isDark ? Colors.grey.shade700 : Colors.grey.shade100;
+
     return Shimmer.fromColors(
-      baseColor: Colors.grey.shade300,
-      highlightColor: Colors.grey.shade100,
+      baseColor: baseColor,
+      highlightColor: highlightColor,
       child: Container(
         height: height,
         width: width,
         decoration: BoxDecoration(
-          color: Colors.grey.shade300,
+          color: baseColor,
           borderRadius: BorderRadius.circular(8),
         ),
       ),
@@ -141,14 +150,18 @@ class CircularShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
+    final highlightColor = isDark ? Colors.grey.shade700 : Colors.grey.shade100;
+
     return Shimmer.fromColors(
-      baseColor: Colors.grey.shade300,
-      highlightColor: Colors.grey.shade100,
+      baseColor: baseColor,
+      highlightColor: highlightColor,
       child: Container(
         width: size,
         height: size,
         decoration: BoxDecoration(
-          color: Colors.grey.shade300,
+          color: baseColor,
           shape: BoxShape.circle,
         ),
       ),
@@ -162,13 +175,17 @@ class IntegrityBadgeShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
+    final highlightColor = isDark ? Colors.grey.shade700 : Colors.grey.shade100;
+
     return Shimmer.fromColors(
-      baseColor: Colors.grey.shade300,
-      highlightColor: Colors.grey.shade100,
+      baseColor: baseColor,
+      highlightColor: highlightColor,
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          color: Colors.grey.shade300,
+          color: baseColor,
           borderRadius: BorderRadius.circular(20),
         ),
         child: Row(
@@ -178,7 +195,7 @@ class IntegrityBadgeShimmer extends StatelessWidget {
               width: 18,
               height: 18,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: baseColor,
                 shape: BoxShape.circle,
               ),
             ),
@@ -187,7 +204,7 @@ class IntegrityBadgeShimmer extends StatelessWidget {
               width: 60,
               height: 12,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: baseColor,
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
@@ -206,6 +223,10 @@ class StatsCardShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
+    final highlightColor = isDark ? Colors.grey.shade700 : Colors.grey.shade100;
+
     return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
@@ -216,17 +237,17 @@ class StatsCardShimmer extends StatelessWidget {
         crossAxisSpacing: 12,
       ),
       itemCount: count,
-      itemBuilder: (_, __) => _buildStatsShimmer(),
+      itemBuilder: (_, __) => _buildStatsShimmer(baseColor, highlightColor),
     );
   }
 
-  Widget _buildStatsShimmer() {
+  Widget _buildStatsShimmer(Color baseColor, Color highlightColor) {
     return Shimmer.fromColors(
-      baseColor: Colors.grey.shade300,
-      highlightColor: Colors.grey.shade100,
+      baseColor: baseColor,
+      highlightColor: highlightColor,
       child: Container(
         decoration: BoxDecoration(
-          color: Colors.grey.shade300,
+          color: baseColor,
           borderRadius: BorderRadius.circular(12),
         ),
         padding: const EdgeInsets.all(12),
@@ -237,7 +258,7 @@ class StatsCardShimmer extends StatelessWidget {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: baseColor,
                 shape: BoxShape.circle,
               ),
             ),
@@ -246,7 +267,7 @@ class StatsCardShimmer extends StatelessWidget {
               width: 60,
               height: 16,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: baseColor,
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
@@ -255,7 +276,7 @@ class StatsCardShimmer extends StatelessWidget {
               width: 50,
               height: 12,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: baseColor,
                 borderRadius: BorderRadius.circular(4),
               ),
             ),
@@ -274,14 +295,18 @@ class TextFieldShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
+    final highlightColor = isDark ? Colors.grey.shade700 : Colors.grey.shade100;
+
     return Shimmer.fromColors(
-      baseColor: Colors.grey.shade300,
-      highlightColor: Colors.grey.shade100,
+      baseColor: baseColor,
+      highlightColor: highlightColor,
       child: Container(
         height: height,
         width: double.infinity,
         decoration: BoxDecoration(
-          color: Colors.grey.shade300,
+          color: baseColor,
           borderRadius: BorderRadius.circular(8),
         ),
       ),
@@ -299,23 +324,27 @@ class ListItemShimmer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final baseColor = isDark ? Colors.grey.shade800 : Colors.grey.shade300;
+    final highlightColor = isDark ? Colors.grey.shade700 : Colors.grey.shade100;
+
     return ListView.builder(
       itemCount: count,
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
-      itemBuilder: (_, __) => _buildListItemShimmer(),
+      itemBuilder: (_, __) => _buildListItemShimmer(baseColor, highlightColor),
     );
   }
 
-  Widget _buildListItemShimmer() {
+  Widget _buildListItemShimmer(Color baseColor, Color highlightColor) {
     return Shimmer.fromColors(
-      baseColor: Colors.grey.shade300,
-      highlightColor: Colors.grey.shade100,
+      baseColor: baseColor,
+      highlightColor: highlightColor,
       child: Container(
         margin: const EdgeInsets.symmetric(vertical: 8),
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: Colors.grey.shade300,
+          color: baseColor,
           borderRadius: BorderRadius.circular(8),
         ),
         child: Row(
@@ -324,7 +353,7 @@ class ListItemShimmer extends StatelessWidget {
               width: 60,
               height: 60,
               decoration: BoxDecoration(
-                color: Colors.grey.shade300,
+                color: baseColor,
                 borderRadius: BorderRadius.circular(8),
               ),
             ),
@@ -337,7 +366,7 @@ class ListItemShimmer extends StatelessWidget {
                     width: 100,
                     height: 16,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: baseColor,
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),
@@ -346,7 +375,7 @@ class ListItemShimmer extends StatelessWidget {
                     width: double.infinity,
                     height: 12,
                     decoration: BoxDecoration(
-                      color: Colors.grey.shade300,
+                      color: baseColor,
                       borderRadius: BorderRadius.circular(4),
                     ),
                   ),

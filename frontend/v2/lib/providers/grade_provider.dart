@@ -210,6 +210,7 @@ class GradeProvider extends ChangeNotifier {
       if (grade.originalGrade != null) {
         _grades[index] = grade.copyWith(
           grade: grade.originalGrade,
+          letterGrade: grade.originalLetterGrade ?? grade.letterGrade,
           isVerified: true,
           verificationError: null,
         );

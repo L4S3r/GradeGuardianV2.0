@@ -15,6 +15,9 @@ class GradesScreen extends StatefulWidget {
 }
 
 class _GradesScreenState extends State<GradesScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  bool _isSearching = false;
+
   @override
   void initState() {
     super.initState();
@@ -24,13 +27,40 @@ class _GradesScreenState extends State<GradesScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
 @override
 Widget build(BuildContext context) {
   return Scaffold(
     appBar: AppBar(
-      title: const Text('Grade Records'),
+      title: _isSearching
+          ? TextField(
+              controller: _searchController,
+              autofocus: true,
+              decoration: const InputDecoration(
+                hintText: 'Search Course or Student ID...',
+                border: InputBorder.none,
+                hintStyle: TextStyle(color: Colors.white70),
+              ),
+              style: const TextStyle(color: Colors.white, fontSize: 18),
+              onChanged: (value) => setState(() {}),
+            )
+          : const Text('Grade Records'),
       elevation: 0,
       actions: [
+        IconButton(
+          icon: Icon(_isSearching ? Icons.close : Icons.search),
+          onPressed: () {
+            setState(() {
+              _isSearching = !_isSearching;
+              if (!_isSearching) _searchController.clear();
+            });
+          },
+        ),
         // Refresh button
         IconButton(
           icon: const Icon(Icons.refresh),
@@ -69,14 +99,16 @@ Widget build(BuildContext context) {
 }
 
   Widget _buildTamperAlertBanner(GradeProvider provider) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.red.shade700,
+        color: isDark ? Colors.red.shade900 : Colors.red.shade700,
         boxShadow: [
           BoxShadow(
-            color: Colors.red.shade200,
+            color: isDark ? Colors.black54 : Colors.red.shade200,
             blurRadius: 8,
             offset: const Offset(0, 2),
           ),
@@ -129,6 +161,15 @@ Widget build(BuildContext context) {
   }
 
   Widget _buildBody(GradeProvider provider) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final filteredGrades = provider.grades.where((grade) {
+      final query = _searchController.text.toLowerCase();
+      if (query.isEmpty) return true;
+      return grade.courseCode.toLowerCase().contains(query) ||
+             grade.studentId.toLowerCase().contains(query);
+    }).toList();
+
     if (provider.isLoading) {
       return GradeCardShimmer();
     }
@@ -141,7 +182,7 @@ Widget build(BuildContext context) {
             Icon(
               Icons.error_outline,
               size: 64,
-              color: Colors.red.shade400,
+              color: Theme.of(context).colorScheme.error.withOpacity(0.7),
             ),
             const SizedBox(height: 16),
             Text(
@@ -155,7 +196,7 @@ Widget build(BuildContext context) {
                 provider.errorMessage ?? 'Unknown error',
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                      color: Colors.grey.shade600,
+                      color: Theme.of(context).hintColor,
                     ),
               ),
             ),
@@ -180,7 +221,7 @@ Widget build(BuildContext context) {
             Icon(
               Icons.school_outlined,
               size: 64,
-              color: Colors.grey.shade400,
+              color: Theme.of(context).hintColor.withOpacity(0.5),
             ),
             const SizedBox(height: 16),
             Text(
@@ -191,9 +232,31 @@ Widget build(BuildContext context) {
             Text(
               'Your grade records will appear here',
               style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: Colors.grey.shade600,
+                    color: Theme.of(context).hintColor,
                   ),
             ),
+          ],
+        ),
+      );
+    }
+
+    if (filteredGrades.isEmpty && _searchController.text.isNotEmpty) {
+      return Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              Icons.search_off_rounded,
+              size: 64,
+              color: Theme.of(context).hintColor.withOpacity(0.5),
+            ),
+            const SizedBox(height: 16),
+            Text(
+              'No matches found',
+              style: Theme.of(context).textTheme.titleLarge,
+            ),
+            const SizedBox(height: 8),
+            const Text('Try searching for a different course or ID'),
           ],
         ),
       );
@@ -207,16 +270,17 @@ Widget build(BuildContext context) {
           if (provider.isVerifying)
             Container(
               padding: const EdgeInsets.all(12),
-              color: Colors.blue.shade50,
-              child: const Row(
+              color: isDark ? Colors.blue.shade900.withOpacity(0.3) : Colors.blue.shade50,
+              child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  CircularShimmer(size: 16),
-                  SizedBox(width: 12),
+                  const CircularShimmer(size: 16),
+                  const SizedBox(width: 12),
                   Text(
                     'Verifying grade integrity...',
                     style: TextStyle(
                       fontWeight: FontWeight.w600,
+                      color: isDark ? Colors.blue.shade200 : null,
                     ),
                   ),
                 ],
@@ -227,9 +291,9 @@ Widget build(BuildContext context) {
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.only(top: 8, bottom: 16),
-              itemCount: provider.grades.length,
+              itemCount: filteredGrades.length,
               itemBuilder: (context, index) {
-                final grade = provider.grades[index];
+                final grade = filteredGrades[index];
                 return GradeCard(
                   grade: grade,
                   onRetryVerification: () {
@@ -252,10 +316,10 @@ Widget build(BuildContext context) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Row(
+        title: Row(
           children: [
-            Icon(Icons.report_problem, color: Colors.red),
-            SizedBox(width: 8),
+            Icon(Icons.report_problem, color: Theme.of(context).colorScheme.error),
+            const SizedBox(width: 8),
             Text('Tampered Records'),
           ],
         ),
@@ -272,7 +336,10 @@ Widget build(BuildContext context) {
                 padding: const EdgeInsets.symmetric(vertical: 4),
                 child: Text(
                   '• ${grade.courseCode} - ${grade.courseName}',
-                  style: const TextStyle(fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    color: Theme.of(context).colorScheme.error,
+                  ),
                 ),
               ),
             ),
@@ -296,8 +363,8 @@ Widget build(BuildContext context) {
             icon: const Icon(Icons.refresh),
             label: const Text('Re-verify All'),
             style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.red.shade700,
-              foregroundColor: Colors.white,
+              backgroundColor: Theme.of(context).colorScheme.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
             ),
           ),
         ],
