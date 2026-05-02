@@ -427,6 +427,36 @@ async def create_batch_grades(
     db.commit()
     return created_grades
 
+@app.put("/grades/{grade_id}", response_model=GradeResponse)
+async def update_grade(
+    grade_id: str,
+    update_data: GradeUpdate,
+    db: Session = Depends(get_db),
+    current: ProfessorDB = Depends(get_current_professor),
+):
+    grade = db.query(GradeDB).filter(GradeDB.id == grade_id, GradeDB.professor_id == current.id).first()
+    if not grade:
+        raise HTTPException(status_code=404, detail="Grade not found")
+
+    old_grade = grade.grade
+    grade.grade = update_data.grade
+    grade.letter_grade = update_data.letter_grade
+    
+    # Recompute hash for integrity with the new values
+    data_string = build_grade_data_string(grade.id, grade.student_id, grade.course_code, grade.grade, grade.letter_grade, grade.recorded_at.isoformat())
+    grade.hash = compute_hash(data_string)
+
+    # Securely log the edit in the audit log
+    db.add(AuditLogDB(
+        grade_id=grade.id,
+        action="Grade Edited",
+        status="EDITED",
+        error_details=f"Grade changed from {old_grade} to {update_data.grade}"
+    ))
+    db.commit()
+    db.refresh(grade)
+    return grade
+
 @app.post("/repair/{grade_id}", response_model=GradeResponse)
 async def repair_grade(
     grade_id: str,
@@ -523,14 +553,21 @@ async def get_professor_statistics(
     grades = db.query(GradeDB).filter(GradeDB.professor_id == current.id).all()
     
     if not grades:
-        return {"total_grades": 0, "average_grade": 0, "course_stats": {}}
+        return {"total_grades": 0, "average_grade": 0, "course_stats": {}, "grade_distribution": {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}}
 
     course_map = {}
+    distribution = {"A": 0, "B": 0, "C": 0, "D": 0, "F": 0}
     for g in grades:
         if g.course_code not in course_map:
             course_map[g.course_code] = {"sum": 0.0, "count": 0, "name": g.course_name}
         course_map[g.course_code]["sum"] += g.grade
         course_map[g.course_code]["count"] += 1
+
+        letter = g.letter_grade[0].upper() if g.letter_grade else "F"
+        if letter in distribution:
+            distribution[letter] += 1
+        else:
+            distribution["F"] += 1
 
     return {
         "total_grades_submitted": len(grades),
@@ -538,7 +575,8 @@ async def get_professor_statistics(
         "course_stats": {
             code: {"average": round(data["sum"] / data["count"], 2), "students": data["count"], "name": data["name"]}
             for code, data in course_map.items()
-        }
+        },
+        "grade_distribution": distribution
     }
 
 # ─────────────────────────────────────────────────────────────────────────────
