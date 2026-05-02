@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'shimmer_loaders.dart';
 
 /// Widget that displays the integrity/verification status of a grade
 class IntegrityBadge extends StatelessWidget {
@@ -36,22 +37,14 @@ class IntegrityBadge extends StatelessWidget {
         borderRadius: BorderRadius.circular(20),
         border: Border.all(color: Colors.blue.shade200),
       ),
-      child: Row(
+      child: const Row(
         mainAxisSize: MainAxisSize.min,
         children: [
-          SizedBox(
-            width: 16,
-            height: 16,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade600),
-            ),
-          ),
-          const SizedBox(width: 8),
+          CircularShimmer(size: 16),
+          SizedBox(width: 8),
           Text(
             'Verifying...',
             style: TextStyle(
-              color: Colors.blue.shade700,
               fontSize: 12,
               fontWeight: FontWeight.w600,
             ),
@@ -173,9 +166,7 @@ class IntegrityBadgeLarge extends StatelessWidget {
         padding: const EdgeInsets.all(16.0),
         child: Row(
           children: [
-            CircularProgressIndicator(
-              valueColor: AlwaysStoppedAnimation<Color>(Colors.blue.shade600),
-            ),
+            const CircularShimmer(size: 24),
             const SizedBox(width: 16),
             Expanded(
               child: Column(

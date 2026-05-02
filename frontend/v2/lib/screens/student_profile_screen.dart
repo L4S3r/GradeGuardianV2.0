@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../providers/grade_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/shimmer_loaders.dart';
 
 class ProfessorProfileScreen extends StatelessWidget {
   final String name;
@@ -315,9 +316,9 @@ class _CoursesCard extends StatelessWidget {
                   margin: const EdgeInsets.only(bottom: 8),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: tampered > 0 ? AppTheme.dangerLight : Theme.of(context).scaffoldBackgroundColor,
+                    color: tampered > 0 ? AppTheme.dangerLight : AppTheme.primary.withOpacity(0.08),
                     borderRadius: AppTheme.radiusMd,
-                    border: Border.all(color: tampered > 0 ? AppTheme.dangerBorder : Theme.of(context).dividerColor),
+                    border: Border.all(color: tampered > 0 ? AppTheme.dangerBorder : AppTheme.primary.withOpacity(0.3)),
                   ),
                   child: Row(
                     children: [
@@ -395,7 +396,7 @@ class _ActionsCard extends StatelessWidget {
             child: OutlinedButton.icon(
               onPressed: provider.isVerifying ? null : provider.verifyAllGrades,
               icon: provider.isVerifying
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  ? const CircularShimmer(size: 16)
                   : const Icon(Icons.verified_user_outlined),
               label: Text(provider.isVerifying ? 'Verifying…' : 'Re-verify All Records'),
             ),

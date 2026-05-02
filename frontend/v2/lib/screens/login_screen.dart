@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../theme/app_theme.dart';
+import '../widgets/shimmer_loaders.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({Key? key}) : super(key: key);
@@ -172,10 +173,7 @@ class _LoginFormState extends State<_LoginForm> {
           ElevatedButton(
             onPressed: _loading ? null : _submit,
             child: _loading
-                ? const SizedBox(
-                    height: 20, width: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                  )
+                ? const CircularShimmer(size: 20)
                 : const Text('Sign In'),
           ),
         ],
@@ -279,10 +277,7 @@ class _RegisterFormState extends State<_RegisterForm> {
             ElevatedButton(
               onPressed: _loading ? null : _submit,
               child: _loading
-                  ? const SizedBox(
-                      height: 20, width: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
-                    )
+                  ? const CircularShimmer(size: 20)
                   : const Text('Create Account'),
             ),
           ],

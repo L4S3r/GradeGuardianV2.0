@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/grade_provider.dart';
+import 'shimmer_loaders.dart';
 
 class AddGradeDialog extends StatefulWidget {
   const AddGradeDialog({super.key});
@@ -157,7 +158,7 @@ Future<void> _saveGrade() async {
         ElevatedButton.icon(
           onPressed: _isLoading ? null : _saveGrade,
           icon: _isLoading 
-            ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
+            ? const CircularShimmer(size: 20)
             : const Icon(Icons.lock),
           label: const Text('Seal & Save'),
         ),

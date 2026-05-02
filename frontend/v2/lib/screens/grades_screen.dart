@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../widgets/add_grade_dialog.dart';
 import '../providers/grade_provider.dart';
 import '../widgets/grade_card.dart';
+import '../widgets/shimmer_loaders.dart';
 
 class GradesScreen extends StatefulWidget {
   final String? studentId;
@@ -129,16 +130,7 @@ Widget build(BuildContext context) {
 
   Widget _buildBody(GradeProvider provider) {
     if (provider.isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(),
-            SizedBox(height: 16),
-            Text('Loading grades...'),
-          ],
-        ),
-      );
+      return GradeCardShimmer();
     }
 
     if (provider.hasError) {
@@ -216,24 +208,14 @@ Widget build(BuildContext context) {
             Container(
               padding: const EdgeInsets.all(12),
               color: Colors.blue.shade50,
-              child: Row(
+              child: const Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(
-                      strokeWidth: 2,
-                      valueColor: AlwaysStoppedAnimation<Color>(
-                        Colors.blue.shade600,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 12),
+                  CircularShimmer(size: 16),
+                  SizedBox(width: 12),
                   Text(
                     'Verifying grade integrity...',
                     style: TextStyle(
-                      color: Colors.blue.shade700,
                       fontWeight: FontWeight.w600,
                     ),
                   ),

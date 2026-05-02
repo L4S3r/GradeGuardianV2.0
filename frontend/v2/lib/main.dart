@@ -11,6 +11,7 @@ import 'screens/stats_screen.dart';
 import 'screens/student_profile_screen.dart';
 import 'screens/login_screen.dart';
 import 'theme/app_theme.dart';
+import 'widgets/shimmer_loaders.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -88,7 +89,7 @@ class _AuthGate extends StatelessWidget {
           case AuthState.unknown:
             // Splash / loading while we restore the session from secure storage
             return const Scaffold(
-              body: Center(child: CircularProgressIndicator()),
+              body: Center(child: CircularShimmer(size: 48)),
             );
           case AuthState.unauthenticated:
             return const LoginScreen();
