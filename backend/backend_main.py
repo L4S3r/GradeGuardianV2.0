@@ -104,6 +104,7 @@ class GradeDB(Base):
     course_name  = Column(String)
     course_code  = Column(String)
     grade        = Column(Float)
+    original_grade = Column(Float, nullable=True)  # Stores grade before any tampering
     letter_grade = Column(String)
     recorded_at  = Column(DateTime, default=datetime.utcnow)
     hash         = Column(String)
@@ -161,6 +162,7 @@ class GradeResponse(GradeCreate):
     professor_id: Optional[str] = None
     recorded_at:  datetime
     hash:         str
+    original_grade: Optional[float] = None  # Original grade before tampering
     is_verified:  bool = Field(default=True)
     model_config  = ConfigDict(from_attributes=True)
 
@@ -320,6 +322,7 @@ async def create_grade(
         course_name  = grade_data.course_name,
         course_code  = grade_data.course_code,
         grade        = grade_data.grade,
+        original_grade = grade_data.grade,  # Store original on creation
         letter_grade = grade_data.letter_grade,
         recorded_at  = now,
     )
@@ -343,11 +346,15 @@ async def repair_grade(
     if not grade:
         raise HTTPException(status_code=404, detail="Grade not found")
 
+    # Restore grade from original_grade if available
+    if grade.original_grade is not None:
+        grade.grade = grade.original_grade
+    
     data_string  = build_grade_data_string(grade.id, grade.student_id, grade.course_code, grade.grade, grade.recorded_at.isoformat())
     grade.hash   = compute_hash(data_string)
-    db.add(AuditLogDB(grade_id=grade.id, action="Admin Repair", status="REPAIRED", error_details="Manual re-seal"))
+    db.add(AuditLogDB(grade_id=grade.id, action="Admin Repair", status="REPAIRED", error_details="Grade restored to original value"))
     db.commit()
-    return {"status": "success", "message": "Integrity restored"}
+    return {"status": "success", "message": "Integrity restored and grade reverted to original"}
 
 
 @app.get("/grades/{grade_id}/logs")

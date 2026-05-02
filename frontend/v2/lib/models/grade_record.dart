@@ -8,6 +8,7 @@ class GradeRecord extends Equatable {
   final String courseName;
   final String courseCode;
   final double grade;
+  final double? originalGrade;  // Original grade before any tampering
   final String letterGrade;
   final DateTime recordedAt;
   final String hash;
@@ -20,6 +21,7 @@ class GradeRecord extends Equatable {
     required this.courseName,
     required this.courseCode,
     required this.grade,
+    this.originalGrade,
     required this.letterGrade,
     required this.recordedAt,
     required this.hash,
@@ -37,6 +39,7 @@ class GradeRecord extends Equatable {
       courseName: json['course_name'] ?? 'N/A',
       courseCode: json['course_code'] ?? 'N/A',
       grade: (json['grade'] as num?)?.toDouble() ?? 0.0,
+      originalGrade: (json['original_grade'] as num?)?.toDouble(),
       letterGrade: json['letter_grade'] ?? 'F',
       recordedAt: json['recorded_at'] != null 
           ? DateTime.parse(json['recorded_at']) 
@@ -60,6 +63,7 @@ class GradeRecord extends Equatable {
       'course_name': courseName,
       'course_code': courseCode,
       'grade': grade,
+      'original_grade': originalGrade,
       'letter_grade': letterGrade,
       'recorded_at': recordedAt.toIso8601String(),
       'hash': hash,
@@ -75,6 +79,7 @@ class GradeRecord extends Equatable {
     String? courseName,
     String? courseCode,
     double? grade,
+    double? originalGrade,
     String? letterGrade,
     DateTime? recordedAt,
     String? hash,
@@ -87,6 +92,7 @@ class GradeRecord extends Equatable {
       courseName: courseName ?? this.courseName,
       courseCode: courseCode ?? this.courseCode,
       grade: grade ?? this.grade,
+      originalGrade: originalGrade ?? this.originalGrade,
       letterGrade: letterGrade ?? this.letterGrade,
       recordedAt: recordedAt ?? this.recordedAt,
       hash: hash ?? this.hash,
@@ -107,6 +113,7 @@ class GradeRecord extends Equatable {
         courseName,
         courseCode,
         grade,
+        originalGrade,
         letterGrade,
         recordedAt,
         hash,

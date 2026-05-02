@@ -195,6 +195,37 @@ class GradeProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> repairGrade(String gradeId) async {
+    final index = _grades.indexWhere((g) => g.id == gradeId);
+    if (index == -1) {
+      _errorMessage = 'Grade not found';
+      notifyListeners();
+      return false;
+    }
+    try {
+      await _apiService.repairGrade(gradeId);
+      
+      // After repair, restore the grade to original if available
+      final grade = _grades[index];
+      if (grade.originalGrade != null) {
+        _grades[index] = grade.copyWith(
+          grade: grade.originalGrade,
+          isVerified: true,
+          verificationError: null,
+        );
+      }
+      
+      _errorMessage = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      debugPrint('repairGrade error: $e');
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> refresh({String? studentId}) async =>
       loadGrades(studentId: studentId);
 
