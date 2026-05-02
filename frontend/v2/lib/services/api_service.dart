@@ -153,13 +153,13 @@ class ApiService {
     throw Exception('Failed to load audit logs');
   }
 
-  Future<Map<String, dynamic>> repairGrade(String gradeId) async {
+  Future<GradeRecord> repairGrade(String gradeId) async {
     final response = await http.post(
       Uri.parse('$baseUrl/repair/$gradeId'),
       headers: _headers,
     );
     if (response.statusCode == 200) {
-      return jsonDecode(response.body);
+      return GradeRecord.fromJson(jsonDecode(response.body));
     }
     throw Exception('Failed to repair grade: ${response.body}');
   }

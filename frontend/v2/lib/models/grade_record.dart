@@ -109,7 +109,11 @@ class GradeRecord extends Equatable {
 
   /// Generate the data string used for hashing (must match backend)
   String get dataForHashing {
-    return '$id|$studentId|$courseCode|$grade|$letterGrade|${recordedAt.toIso8601String()}';
+    // Match backend logic exactly: 
+    // ts_str = recorded_at.replace("Z", "").split(".")[0] and {:.1f} for grade
+    final tsStr = recordedAt.toIso8601String().replaceAll('Z', '').split('.').first;
+    final gradeVal = grade.toStringAsFixed(1);
+    return '$id|$studentId|$courseCode|$gradeVal|$letterGrade|$tsStr';
   }
 
   @override

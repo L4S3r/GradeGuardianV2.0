@@ -34,10 +34,10 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = 72   # professors stay logged in for 3 days
 
 
-def build_grade_data_string(grade_id, student_id, course_code, grade, recorded_at):
+def build_grade_data_string(grade_id, student_id, course_code, grade, letter_grade, recorded_at):
     ts_str    = recorded_at.replace("Z", "").split(".")[0]
     grade_val = "{:.1f}".format(float(grade))
-    return f"{grade_id}|{student_id}|{course_code}|{grade_val}|{ts_str}"
+    return f"{grade_id}|{student_id}|{course_code}|{grade_val}|{letter_grade}|{ts_str}"
 
 def compute_hash(data_string: str) -> str:
     return hmac.new(
