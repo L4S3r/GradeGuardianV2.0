@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/grade_provider.dart';
+import '../services/api_service.dart';
+import '../models/course_model.dart';
 import 'shimmer_loaders.dart';
 
 class AddGradeDialog extends StatefulWidget {
@@ -15,19 +17,78 @@ class _AddGradeDialogState extends State<AddGradeDialog> {
   
   // Controllers for form fields
   final _studentIdController = TextEditingController();
-  final _courseNameController = TextEditingController();
-  final _courseCodeController = TextEditingController();
   final _gradeController = TextEditingController();
   
   String _letterGrade = 'F';
   bool _isLoading = false;
   bool _isSuccess = false;
 
+  List<CourseModel>? _courses;
+  CourseModel? _selectedCourse;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadCourses();
+  }
+
+  Future<void> _loadCourses() async {
+    try {
+      final courses = await context.read<ApiService>().fetchCourses();
+      if (mounted) {
+        setState(() {
+          _courses = courses;
+          if (courses.isNotEmpty) _selectedCourse = courses.first;
+        });
+      }
+    } catch (e) {
+      if (mounted) setState(() => _courses = []);
+      debugPrint('Failed to load courses: $e');
+    }
+  }
+
+  Future<void> _showAddCourseDialog() async {
+    final codeCtrl = TextEditingController();
+    final nameCtrl = TextEditingController();
+    final result = await showDialog<CourseModel>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Add Course'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(controller: codeCtrl, decoration: const InputDecoration(labelText: 'Course Code (e.g. CS101)')),
+            TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Course Name (e.g. Intro to CS)')),
+          ],
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Cancel')),
+          ElevatedButton(
+            onPressed: () async {
+              if (codeCtrl.text.isEmpty || nameCtrl.text.isEmpty) return;
+              try {
+                final newCourse = await context.read<ApiService>().createCourse(codeCtrl.text, nameCtrl.text);
+                if (ctx.mounted) Navigator.pop(ctx, newCourse);
+              } catch (e) {
+                if (ctx.mounted) ScaffoldMessenger.of(ctx).showSnackBar(SnackBar(content: Text('Error: $e')));
+              }
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+    if (result != null && mounted) {
+      setState(() {
+        _courses?.add(result);
+        _selectedCourse = result;
+      });
+    }
+  }
+
   @override
   void dispose() {
     _studentIdController.dispose();
-    _courseNameController.dispose();
-    _courseCodeController.dispose();
     _gradeController.dispose();
     super.dispose();
   }
@@ -71,8 +132,8 @@ Future<void> _saveGrade() async {
       // 2. Call the provider with EXACT parameter names
       final success = await context.read<GradeProvider>().submitGrade(
         studentId: _studentIdController.text.trim(),
-        courseName: _courseNameController.text.trim(),
-        courseCode: _courseCodeController.text.trim(),
+        courseName: _selectedCourse!.courseName,
+        courseCode: _selectedCourse!.courseCode,
         grade: double.parse(_gradeController.text),
         letterGrade: _letterGrade, // Ensure this variable name matches line 70 of GradeProvider
       );
@@ -147,16 +208,36 @@ Future<void> _saveGrade() async {
                 decoration: const InputDecoration(labelText: 'Student ID'),
                 validator: (v) => v!.isEmpty ? 'Required' : null,
               ),
-              TextFormField(
-                controller: _courseNameController,
-                decoration: const InputDecoration(labelText: 'Course Name'),
-                validator: (v) => v!.isEmpty ? 'Required' : null,
-              ),
-              TextFormField(
-                controller: _courseCodeController,
-                decoration: const InputDecoration(labelText: 'Course Code'),
-                validator: (v) => v!.isEmpty ? 'Required' : null,
-              ),
+              const SizedBox(height: 10),
+              if (_courses == null)
+                const Padding(
+                  padding: EdgeInsets.all(16.0),
+                  child: Center(child: CircularShimmer(size: 30)),
+                )
+              else
+                Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: DropdownButtonFormField<CourseModel>(
+                        value: _selectedCourse,
+                        decoration: const InputDecoration(labelText: 'Course'),
+                        items: _courses!.map((c) => DropdownMenuItem(
+                          value: c,
+                          child: Text(c.displayName, overflow: TextOverflow.ellipsis),
+                        )).toList(),
+                        onChanged: (val) => setState(() => _selectedCourse = val),
+                        validator: (v) => v == null ? 'Please select or add a course' : null,
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.add_box),
+                      tooltip: 'Add New Course',
+                      color: Theme.of(context).colorScheme.primary,
+                      onPressed: _showAddCourseDialog,
+                    ),
+                  ],
+                ),
               const SizedBox(height: 10),
               Row(
                 children: [

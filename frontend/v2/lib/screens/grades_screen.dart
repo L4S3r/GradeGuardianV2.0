@@ -5,6 +5,7 @@ import '../widgets/add_grade_dialog.dart';
 import '../providers/grade_provider.dart';
 import '../widgets/grade_card.dart';
 import '../widgets/shimmer_loaders.dart';
+import 'batch_grade_screen.dart';
 
 class GradesScreen extends StatefulWidget {
   final String? studentId;
@@ -103,13 +104,44 @@ Widget build(BuildContext context) {
     ),
     floatingActionButton: FloatingActionButton.extended(
       onPressed: () {
-        showDialog(
+        showModalBottomSheet(
           context: context,
-          builder: (context) => const AddGradeDialog(),
+          shape: const RoundedRectangleBorder(
+            borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+          ),
+          builder: (context) => SafeArea(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.person_add),
+                  title: const Text('Single Grade Entry'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    showDialog(
+                      context: context,
+                      builder: (context) => const AddGradeDialog(),
+                    );
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.library_add),
+                  title: const Text('Batch Grade Entry'),
+                  onTap: () {
+                    Navigator.pop(context);
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(builder: (context) => const BatchGradeScreen()),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
         );
       },
-      label: const Text('Add Grade'),
-      icon: const Icon(Icons.add_moderator), // Represents a "Secure" add
+      label: const Text('Add Grades'),
+      icon: const Icon(Icons.add),
     ),
   ); 
 }

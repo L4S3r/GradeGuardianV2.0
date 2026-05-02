@@ -119,6 +119,20 @@ class GradeProvider extends ChangeNotifier {
     }
   }
 
+  Future<bool> submitBatchGrades(List<Map<String, dynamic>> batchData) async {
+    try {
+      final newGrades = await _apiService.submitBatchGrades(batchData);
+      _grades.insertAll(0, newGrades);
+      notifyListeners();
+      return true;
+    } catch (e, st) {
+      debugPrint('submitBatchGrades error: $e\n$st');
+      _errorMessage = e.toString();
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<void> verifyAllGrades() async {
     if (_grades.isEmpty) return;
     _isVerifying = true;

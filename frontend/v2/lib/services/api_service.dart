@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import '../models/grade_record.dart';
 import '../models/audit_log.dart';
+import '../models/course_model.dart';
 
 class ApiService {
   final String baseUrl;
@@ -104,6 +105,26 @@ class ApiService {
     throw Exception('Failed to submit grade: ${response.body}');
   }
 
+  Future<List<GradeRecord>> submitBatchGrades(List<Map<String, dynamic>> grades) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/grades/batch'),
+      headers: _headers,
+      body: jsonEncode({'grades': grades}),
+    );
+    
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      final List<dynamic> body = jsonDecode(response.body);
+      return body.map((item) => GradeRecord.fromJson(item)).toList();
+    }
+    
+    String errorDetail = 'Unknown error';
+    try {
+      errorDetail = jsonDecode(response.body)['detail'] ?? response.body;
+    } catch (_) {}
+    
+    throw Exception('Failed to submit batch grades: $errorDetail');
+  }
+
   Future<Map<String, dynamic>> verifyGrade(String gradeId) async {
     final results = await verifyMultipleGrades([gradeId]);
     if (results.isNotEmpty) {
@@ -170,6 +191,31 @@ class ApiService {
       return GradeRecord.fromJson(jsonDecode(response.body));
     }
     throw Exception('Failed to repair grade: ${response.body}');
+  }
+
+  // ── Courses ───────────────────────────────────────────────────────────────
+  Future<List<CourseModel>> fetchCourses() async {
+    final response = await http.get(Uri.parse('$baseUrl/courses'), headers: _headers);
+    if (response.statusCode == 200) {
+      final List<dynamic> body = jsonDecode(response.body);
+      return body.map((item) => CourseModel.fromJson(item)).toList();
+    }
+    throw Exception('Failed to load courses');
+  }
+
+  Future<CourseModel> createCourse(String courseCode, String courseName) async {
+    final response = await http.post(
+      Uri.parse('$baseUrl/courses'),
+      headers: _headers,
+      body: jsonEncode({
+        'course_code': courseCode,
+        'course_name': courseName,
+      }),
+    );
+    if (response.statusCode == 201 || response.statusCode == 200) {
+      return CourseModel.fromJson(jsonDecode(response.body));
+    }
+    throw Exception('Failed to create course: ${response.body}');
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
