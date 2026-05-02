@@ -203,18 +203,8 @@ class GradeProvider extends ChangeNotifier {
       return false;
     }
     try {
-      await _apiService.repairGrade(gradeId);
-      
-      // After repair, restore the grade to original if available
-      final grade = _grades[index];
-      if (grade.originalGrade != null) {
-        _grades[index] = grade.copyWith(
-          grade: grade.originalGrade,
-          letterGrade: grade.originalLetterGrade ?? grade.letterGrade,
-          isVerified: true,
-          verificationError: null,
-        );
-      }
+      final updatedGrade = await _apiService.repairGrade(gradeId);
+      _grades[index] = updatedGrade;
       
       _errorMessage = null;
       notifyListeners();

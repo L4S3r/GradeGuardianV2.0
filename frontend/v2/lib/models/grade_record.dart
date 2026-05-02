@@ -109,7 +109,7 @@ class GradeRecord extends Equatable {
 
   /// Generate the data string used for hashing (must match backend)
   String get dataForHashing {
-    return '$id|$studentId|$courseCode|$grade|${recordedAt.toIso8601String()}';
+    return '$id|$studentId|$courseCode|$grade|$letterGrade|${recordedAt.toIso8601String()}';
   }
 
   @override
