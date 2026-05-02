@@ -442,6 +442,10 @@ async def update_grade(
     grade.grade = update_data.grade
     grade.letter_grade = update_data.letter_grade
     
+    # Update the secure backup so "Repair" restores the legitimate edit, not the creation grade
+    grade.original_grade = update_data.grade
+    grade.original_letter_grade = update_data.letter_grade
+
     # Recompute hash for integrity with the new values
     data_string = build_grade_data_string(grade.id, grade.student_id, grade.course_code, grade.grade, grade.letter_grade, grade.recorded_at.isoformat())
     grade.hash = compute_hash(data_string)
@@ -466,6 +470,10 @@ async def repair_grade(
     grade = db.query(GradeDB).filter(GradeDB.id == grade_id, GradeDB.professor_id == current.id).first()
     if not grade:
         raise HTTPException(status_code=404, detail="Grade not found")
+
+    # Prevent legitimizing a tampered record if we don't actually have the backups
+    if grade.original_grade is None or grade.original_letter_grade is None:
+        raise HTTPException(status_code=400, detail="Cannot repair: secure backup data is missing.")
 
     # Restore grade from original_grade if available
     if grade.original_grade is not None:
