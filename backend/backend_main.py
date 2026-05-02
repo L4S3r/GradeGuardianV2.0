@@ -184,6 +184,10 @@ class GradeCreate(BaseModel):
     grade:        float
     letter_grade: str
 
+class GradeUpdate(BaseModel):
+    grade:        float
+    letter_grade: str
+
 class GradeResponse(GradeCreate):
     id:           str
     professor_id: Optional[str] = None
