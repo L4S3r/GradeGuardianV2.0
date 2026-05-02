@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy import create_engine, Column, String, Float, DateTime, Integer, ForeignKey
+from sqlalchemy import create_engine, Column, String, Float, DateTime, Integer, ForeignKey, inspect, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel, ConfigDict, Field
@@ -120,6 +120,24 @@ class AuditLogDB(Base):
     checked_at   = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     error_details = Column(String, nullable=True)
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 2.5 MIGRATION HELPER
+# ─────────────────────────────────────────────────────────────────────────────
+def run_migrations(engine):
+    """Ensures existing tables have the latest columns (simple auto-migration)."""
+    inspector = inspect(engine)
+    if "grades" in inspector.get_table_names():
+        columns = [c["name"] for c in inspector.get_columns("grades")]
+        with engine.connect() as conn:
+            if "original_letter_grade" not in columns:
+                print("Adding missing column: original_letter_grade")
+                conn.execute(text("ALTER TABLE grades ADD COLUMN original_letter_grade VARCHAR"))
+            if "original_grade" not in columns:
+                print("Adding missing column: original_grade")
+                conn.execute(text("ALTER TABLE grades ADD COLUMN original_grade FLOAT"))
+            conn.commit()
+
+run_migrations(engine)
 
 Base.metadata.create_all(bind=engine)
 
