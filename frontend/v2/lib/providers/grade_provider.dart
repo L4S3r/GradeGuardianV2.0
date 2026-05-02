@@ -76,12 +76,12 @@ class GradeProvider extends ChangeNotifier {
   }
 
   // Actions
-  Future<void> loadGrades({String? studentId}) async {
+  Future<void> loadGrades({String? studentId, String? search}) async {
     _loadingState = GradeLoadingState.loading;
     _errorMessage = null;
     notifyListeners();
     try {
-      _grades = await _apiService.fetchGrades(studentId: studentId);
+      _grades = await _apiService.fetchGrades(studentId: studentId, search: search);
       _loadingState = GradeLoadingState.success;
       await verifyAllGrades();
     } catch (e) {
@@ -217,8 +217,8 @@ class GradeProvider extends ChangeNotifier {
     }
   }
 
-  Future<void> refresh({String? studentId}) async =>
-      loadGrades(studentId: studentId);
+  Future<void> refresh({String? studentId, String? search}) async =>
+      loadGrades(studentId: studentId, search: search);
 
   void clear() {
     _grades = [];

@@ -60,11 +60,19 @@ class ApiService {
   }
 
   // ── Grades ────────────────────────────────────────────────────────────────
-  Future<List<GradeRecord>> fetchGrades({String? studentId}) async {
-    String url = '$baseUrl/grades';
-    if (studentId != null) url += '?student_id=$studentId';
+  Future<List<GradeRecord>> fetchGrades({String? studentId, String? search}) async {
+    final Map<String, String> queryParameters = {};
+    if (studentId != null && studentId.isNotEmpty) {
+      queryParameters['student_id'] = studentId;
+    }
+    if (search != null && search.isNotEmpty) {
+      queryParameters['search'] = search;
+    }
 
-    final response = await http.get(Uri.parse(url), headers: _headers);
+    final Uri uri = Uri.parse('$baseUrl/grades').replace(
+      queryParameters: queryParameters.isNotEmpty ? queryParameters : null,
+    );
+    final response = await http.get(uri, headers: _headers);
     if (response.statusCode == 200) {
       final List<dynamic> body = jsonDecode(response.body);
       return body.map((item) => GradeRecord.fromJson(item)).toList();

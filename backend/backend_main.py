@@ -8,7 +8,7 @@ from datetime import datetime, timezone, timedelta
 from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
-from sqlalchemy import create_engine, Column, String, Float, DateTime, Integer, ForeignKey, inspect, text
+from sqlalchemy import create_engine, Column, String, Float, DateTime, Integer, ForeignKey, inspect, text, or_
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 from pydantic import BaseModel, ConfigDict, Field
@@ -107,7 +107,7 @@ class GradeDB(Base):
     original_grade = Column(Float, nullable=True)  # Stores grade before any tampering
     original_letter_grade = Column(String, nullable=True)  # Stores letter grade before any tampering
     letter_grade = Column(String)
-    recorded_at  = Column(DateTime, default=datetime.utcnow)
+    recorded_at  = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     hash         = Column(String)
 
 
@@ -288,12 +288,26 @@ async def get_me(current: ProfessorDB = Depends(get_current_professor)):
 @app.get("/grades", response_model=List[GradeResponse])
 async def get_grades(
     student_id: Optional[str] = None,
+    course_code: Optional[str] = None,
+    course_name: Optional[str] = None,
+    search:      Optional[str] = None,
     db: Session = Depends(get_db),
     current: ProfessorDB = Depends(get_current_professor),
 ):
     query = db.query(GradeDB).filter(GradeDB.professor_id == current.id)
-    if student_id:
-        query = query.filter(GradeDB.student_id == student_id)
+
+    # Advanced Multi-field Search
+    if search:
+        search_filter = f"%{search}%"
+        query = query.filter(or_(
+            GradeDB.student_id.ilike(search_filter),
+            GradeDB.course_code.ilike(search_filter),
+            GradeDB.course_name.ilike(search_filter)
+        ))
+    else:
+        if student_id: query = query.filter(GradeDB.student_id.contains(student_id))
+        if course_code: query = query.filter(GradeDB.course_code.contains(course_code))
+        if course_name: query = query.filter(GradeDB.course_name.contains(course_name))
 
     grades  = query.all()
     results = []
@@ -445,6 +459,33 @@ async def get_audit_logs(
         .all()
     )
 
+
+@app.get("/statistics/summary")
+async def get_professor_statistics(
+    db: Session = Depends(get_db),
+    current: ProfessorDB = Depends(get_current_professor),
+):
+    """Provides a summary of grading statistics for the logged-in professor."""
+    grades = db.query(GradeDB).filter(GradeDB.professor_id == current.id).all()
+    
+    if not grades:
+        return {"total_grades": 0, "average_grade": 0, "course_stats": {}}
+
+    course_map = {}
+    for g in grades:
+        if g.course_code not in course_map:
+            course_map[g.course_code] = {"sum": 0.0, "count": 0, "name": g.course_name}
+        course_map[g.course_code]["sum"] += g.grade
+        course_map[g.course_code]["count"] += 1
+
+    return {
+        "total_grades_submitted": len(grades),
+        "overall_average": round(sum(g.grade for g in grades) / len(grades), 2),
+        "course_stats": {
+            code: {"average": round(data["sum"] / data["count"], 2), "students": data["count"], "name": data["name"]}
+            for code, data in course_map.items()
+        }
+    }
 
 @app.get("/")
 async def root():

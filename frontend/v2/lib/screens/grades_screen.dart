@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:provider/provider.dart';
 import '../widgets/add_grade_dialog.dart';
 import '../providers/grade_provider.dart';
@@ -17,6 +18,7 @@ class GradesScreen extends StatefulWidget {
 class _GradesScreenState extends State<GradesScreen> {
   final TextEditingController _searchController = TextEditingController();
   bool _isSearching = false;
+  Timer? _debounce;
 
   @override
   void initState() {
@@ -30,6 +32,7 @@ class _GradesScreenState extends State<GradesScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _debounce?.cancel();
     super.dispose();
   }
 
@@ -47,7 +50,16 @@ Widget build(BuildContext context) {
                 hintStyle: TextStyle(color: Colors.white70),
               ),
               style: const TextStyle(color: Colors.white, fontSize: 18),
-              onChanged: (value) => setState(() {}),
+            onChanged: (value) {
+              // Debounce search to avoid spamming the backend
+              if (_debounce?.isActive ?? false) _debounce!.cancel();
+              _debounce = Timer(const Duration(milliseconds: 500), () {
+                context.read<GradeProvider>().refresh(
+                  studentId: widget.studentId,
+                  search: value.trim().isEmpty ? null : value.trim(),
+                );
+              });
+            },
             )
           : const Text('Grade Records'),
       elevation: 0,
@@ -57,7 +69,11 @@ Widget build(BuildContext context) {
           onPressed: () {
             setState(() {
               _isSearching = !_isSearching;
-              if (!_isSearching) _searchController.clear();
+            if (!_isSearching) {
+              _searchController.clear();
+              // Reset the list when search is closed
+              context.read<GradeProvider>().refresh(studentId: widget.studentId);
+            }
             });
           },
         ),
@@ -163,13 +179,6 @@ Widget build(BuildContext context) {
   Widget _buildBody(GradeProvider provider) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final filteredGrades = provider.grades.where((grade) {
-      final query = _searchController.text.toLowerCase();
-      if (query.isEmpty) return true;
-      return grade.courseCode.toLowerCase().contains(query) ||
-             grade.studentId.toLowerCase().contains(query);
-    }).toList();
-
     if (provider.isLoading) {
       return GradeCardShimmer();
     }
@@ -240,7 +249,7 @@ Widget build(BuildContext context) {
       );
     }
 
-    if (filteredGrades.isEmpty && _searchController.text.isNotEmpty) {
+    if (provider.grades.isEmpty && _searchController.text.isNotEmpty) {
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -291,9 +300,9 @@ Widget build(BuildContext context) {
           Expanded(
             child: ListView.builder(
               padding: const EdgeInsets.only(top: 8, bottom: 16),
-              itemCount: filteredGrades.length,
+              itemCount: provider.grades.length,
               itemBuilder: (context, index) {
-                final grade = filteredGrades[index];
+                final grade = provider.grades[index];
                 return GradeCard(
                   grade: grade,
                   onRetryVerification: () {
