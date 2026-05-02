@@ -4,6 +4,7 @@ import 'package:provider/provider.dart';
 import '../widgets/add_grade_dialog.dart';
 import '../providers/grade_provider.dart';
 import '../widgets/grade_card.dart';
+import '../widgets/edit_grade_dialog.dart';
 import '../widgets/shimmer_loaders.dart';
 import 'batch_grade_screen.dart';
 
@@ -434,8 +435,10 @@ Widget build(BuildContext context) {
                           provider.verifySingleGrade(grade.id);
                         },
                         onTap: () {
-                          // Navigate to grade detail screen
-                          // Navigator.push(context, ...);
+                          showDialog(
+                            context: context,
+                            builder: (context) => EditGradeDialog(gradeRecord: grade),
+                          );
                         },
                       );
                     },
