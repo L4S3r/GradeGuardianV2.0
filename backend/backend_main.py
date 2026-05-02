@@ -105,6 +105,7 @@ class GradeDB(Base):
     course_code  = Column(String)
     grade        = Column(Float)
     original_grade = Column(Float, nullable=True)  # Stores grade before any tampering
+    original_letter_grade = Column(String, nullable=True)  # Stores letter grade before any tampering
     letter_grade = Column(String)
     recorded_at  = Column(DateTime, default=datetime.utcnow)
     hash         = Column(String)
@@ -163,6 +164,7 @@ class GradeResponse(GradeCreate):
     recorded_at:  datetime
     hash:         str
     original_grade: Optional[float] = None  # Original grade before tampering
+    original_letter_grade: Optional[str] = None  # Original letter grade before tampering
     is_verified:  bool = Field(default=True)
     model_config  = ConfigDict(from_attributes=True)
 
@@ -279,7 +281,7 @@ async def get_grades(
     results = []
 
     for g in grades:
-        data_str     = build_grade_data_string(g.id, g.student_id, g.course_code, g.grade, g.recorded_at.isoformat())
+        data_str     = build_grade_data_string(g.id, g.student_id, g.course_code, g.grade, g.letter_grade, g.recorded_at.isoformat())
         current_hash = compute_hash(data_str)
         is_verified  = (current_hash == g.hash)
 
@@ -297,6 +299,8 @@ async def get_grades(
             "course_code":  g.course_code,
             "grade":        g.grade,
             "letter_grade": g.letter_grade,
+            "original_grade": g.original_grade,
+            "original_letter_grade": g.original_letter_grade,
             "recorded_at":  g.recorded_at.isoformat(),
             "hash":         g.hash,
             "is_verified":  is_verified,
@@ -323,11 +327,12 @@ async def create_grade(
         course_code  = grade_data.course_code,
         grade        = grade_data.grade,
         original_grade = grade_data.grade,  # Store original on creation
+        original_letter_grade = grade_data.letter_grade,  # Store original letter on creation
         letter_grade = grade_data.letter_grade,
         recorded_at  = now,
     )
 
-    data_to_hash   = build_grade_data_string(new_id, grade_data.student_id, grade_data.course_code, grade_data.grade, now.isoformat())
+    data_to_hash   = build_grade_data_string(new_id, grade_data.student_id, grade_data.course_code, grade_data.grade, grade_data.letter_grade, now.isoformat())
     db_grade.hash  = compute_hash(data_to_hash)
 
     db.add(db_grade)
@@ -336,7 +341,7 @@ async def create_grade(
     return db_grade
 
 
-@app.post("/repair/{grade_id}")
+@app.post("/repair/{grade_id}", response_model=GradeResponse)
 async def repair_grade(
     grade_id: str,
     db: Session = Depends(get_db),
@@ -349,12 +354,17 @@ async def repair_grade(
     # Restore grade from original_grade if available
     if grade.original_grade is not None:
         grade.grade = grade.original_grade
+
+    # Restore letter grade from original_letter_grade if available
+    if grade.original_letter_grade is not None:
+        grade.letter_grade = grade.original_letter_grade
     
-    data_string  = build_grade_data_string(grade.id, grade.student_id, grade.course_code, grade.grade, grade.recorded_at.isoformat())
+    data_string  = build_grade_data_string(grade.id, grade.student_id, grade.course_code, grade.grade, grade.letter_grade, grade.recorded_at.isoformat())
     grade.hash   = compute_hash(data_string)
     db.add(AuditLogDB(grade_id=grade.id, action="Admin Repair", status="REPAIRED", error_details="Grade restored to original value"))
     db.commit()
-    return {"status": "success", "message": "Integrity restored and grade reverted to original"}
+    db.refresh(grade)
+    return grade
 
 
 @app.get("/grades/{grade_id}/logs")
@@ -382,7 +392,7 @@ async def verify_batch(
             results.append({"grade_id": g_id, "is_valid": False, "error": "Not found"})
             continue
 
-        data_string  = build_grade_data_string(grade.id, grade.student_id, grade.course_code, grade.grade, grade.recorded_at.isoformat())
+        data_string  = build_grade_data_string(grade.id, grade.student_id, grade.course_code, grade.grade, grade.letter_grade, grade.recorded_at.isoformat())
         current_hash = compute_hash(data_string)
         is_valid     = (current_hash == grade.hash)
 
