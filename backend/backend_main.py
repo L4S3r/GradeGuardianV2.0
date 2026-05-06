@@ -5,7 +5,7 @@ import os
 import uuid
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
-from fastapi import FastAPI, Depends, HTTPException, status
+from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import create_engine, Column, String, Float, DateTime, Integer, ForeignKey, inspect, text, or_
@@ -230,6 +230,9 @@ app = FastAPI(
     title="GradeGuardian API",
     description="Multi-professor grade management with HMAC integrity checks.",
     version="2.0.0",
+    docs_url=None,
+    redoc_url=None,
+    openapi_url=None,
 )
 
 # Initialize Rate Limiter (e.g., max 100 requests per minute per IP)
@@ -286,7 +289,8 @@ def get_current_professor(
 # 5.  AUTH ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────────
 @app.post("/auth/register", response_model=TokenResponse, status_code=201)
-async def register(data: ProfessorRegister, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def register(request: Request, data: ProfessorRegister, db: Session = Depends(get_db)):
     # Check duplicates
     if db.query(ProfessorDB).filter(ProfessorDB.email == data.email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
@@ -313,7 +317,8 @@ async def register(data: ProfessorRegister, db: Session = Depends(get_db)):
 
 
 @app.post("/auth/login", response_model=TokenResponse)
-async def login(data: ProfessorLogin, db: Session = Depends(get_db)):
+@limiter.limit("5/minute")
+async def login(request: Request, data: ProfessorLogin, db: Session = Depends(get_db)):
     professor = db.query(ProfessorDB).filter(ProfessorDB.email == data.email).first()
     if not professor or not verify_password(data.password, professor.password_hash):
         raise HTTPException(status_code=401, detail="Invalid email or password")
