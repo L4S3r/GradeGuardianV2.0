@@ -1,3 +1,39 @@
+# General IDE/OS files
+.DS_Store
+.idea/
+.vscode/
+
+# ---------------------------------------------------------------------------
+# Python Backend
+# ---------------------------------------------------------------------------
+backend/__pycache__/
+backend/*.pyc
+backend/venv/
+backend/.venv/
+backend/env/
+
+# Sensitive files
 backend/secret_salt.txt
-backend/grades.db
 backend/.env
+
+# Local databases
+backend/*.db
+backend/*.db-journal
+backend/grades.db
+
+# ---------------------------------------------------------------------------
+# Flutter Frontend
+# ---------------------------------------------------------------------------
+frontend/v2/.dart_tool/
+frontend/v2/.flutter-plugins
+frontend/v2/.flutter-plugins-dependencies
+frontend/v2/.packages
+frontend/v2/build/
+frontend/v2/pubspec.lock
+frontend/v2/*.iml
+
+# Platform-specific build artifacts
+frontend/v2/ios/Pods/
+frontend/v2/ios/Podfile.lock
+frontend/v2/android/.gradle/
+frontend/v2/android/local.properties
