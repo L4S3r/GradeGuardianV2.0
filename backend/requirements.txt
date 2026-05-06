@@ -4,3 +4,6 @@ sqlalchemy
 pydantic
 psycopg2-binary
 PyJWT
+
+# Security & Rate Limiting
+slowapi
