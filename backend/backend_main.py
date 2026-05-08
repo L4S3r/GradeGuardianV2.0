@@ -38,11 +38,17 @@ JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = 72   # professors stay logged in for 3 days
 
 
+# Use this identical function in BOTH backends
 def build_grade_data_string(grade_id, student_id, course_code, grade, letter_grade, recorded_at):
-    ts_str    = recorded_at.replace("Z", "").split(".")[0]
+    # Accept either a datetime object or an ISO string
+    if isinstance(recorded_at, datetime):
+        ts_str = recorded_at.strftime('%Y-%m-%dT%H:%M:%S')
+    else:
+        # Strip timezone offset (+00:00 or Z) and microseconds, keep first 19 chars
+        ts_str = str(recorded_at).replace('Z', '').replace('+00:00', '').split('.')[0][:19]
+
     grade_val = "{:.1f}".format(float(grade))
     return f"{grade_id}|{student_id}|{course_code}|{grade_val}|{letter_grade}|{ts_str}"
-
 def compute_hash(data_string: str) -> str:
     return hmac.new(
         SECRET_SALT.encode(),
@@ -405,7 +411,8 @@ async def create_grade(
     current: ProfessorDB = Depends(get_current_professor),
 ):
     new_id = str(uuid.uuid4())
-    now    = datetime.now(timezone.utc)
+    # In create_grade and create_batch_grades (v2)
+    now = datetime.now(timezone.utc).replace(microsecond=0, tzinfo=None)  # naive, no micros
 
     db_grade = GradeDB(
         id           = new_id,
