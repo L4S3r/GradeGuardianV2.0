@@ -40,13 +40,13 @@ JWT_EXPIRE_HOURS = 72   # professors stay logged in for 3 days
 
 # Use this identical function in BOTH backends
 def build_grade_data_string(grade_id, student_id, course_code, grade, letter_grade, recorded_at):
-    # Accept either a datetime object or an ISO string
-    if isinstance(recorded_at, datetime):
+    # Normalize: accept datetime object or any ISO string variant
+    if hasattr(recorded_at, 'strftime'):
         ts_str = recorded_at.strftime('%Y-%m-%dT%H:%M:%S')
     else:
-        # Strip timezone offset (+00:00 or Z) and microseconds, keep first 19 chars
-        ts_str = str(recorded_at).replace('Z', '').replace('+00:00', '').split('.')[0][:19]
-
+        # Strip +00:00, Z, microseconds — always keep exactly YYYY-MM-DDTHH:MM:SS
+        ts_str = str(recorded_at).replace('+00:00', '').replace('Z', '').split('.')[0][:19]
+    
     grade_val = "{:.1f}".format(float(grade))
     return f"{grade_id}|{student_id}|{course_code}|{grade_val}|{letter_grade}|{ts_str}"
 def compute_hash(data_string: str) -> str:
