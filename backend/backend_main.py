@@ -32,8 +32,8 @@ def get_or_create_salt():
         f.write(new_salt)
     return new_salt
 
-SECRET_SALT   = os.getenv("SECRET_SALT",   get_or_create_salt())
-JWT_SECRET    = os.getenv("JWT_SECRET",    secrets.token_hex(32))   # sign tokens
+SECRET_SALT = os.environ["SECRET_SALT"]
+JWT_SECRET  = os.environ["JWT_SECRET"]   # sign tokens
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = 72   # professors stay logged in for 3 days
 
@@ -642,6 +642,21 @@ async def create_course(
 @app.get("/")
 async def root():
     return {"message": "GradeGuardian API v2 is Online", "status": "Secure"}
+
+@app.post("/admin/rehash-grades")
+async def rehash_grades(
+    db: Session = Depends(get_db),
+    current: ProfessorDB = Depends(get_current_professor),  # must be authenticated
+):
+    grades = db.query(GradeDB).all()
+    for g in grades:
+        data_str = build_grade_data_string(
+            g.id, g.student_id, g.course_code,
+            g.grade, g.letter_grade, g.recorded_at.isoformat()
+        )
+        g.hash = compute_hash(data_str)
+    db.commit()
+    return {"recomputed": len(grades)}
 
 
 if __name__ == "__main__":

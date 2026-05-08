@@ -25,7 +25,6 @@ class GradeCard extends StatelessWidget {
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
-        backgroundColor: Colors.transparent,
         builder: (_) => const AuditLogSheet(),
       );
     }
@@ -100,6 +99,8 @@ class GradeCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(grade.courseCode, style: AppTheme.labelSmall),
+                        const SizedBox(height: 2),
+                        Text('Student ID: ${grade.studentId}', style: AppTheme.labelSmall),
                           ],
                         ),
                       ),
