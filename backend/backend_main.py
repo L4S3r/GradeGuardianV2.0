@@ -329,17 +329,23 @@ class AuditLogResponse(BaseModel):
 # ─────────────────────────────────────────────────────────────────────────────
 # 4.  APP & MIDDLEWARE
 # ─────────────────────────────────────────────────────────────────────────────
-ENVIRONMENT = os.getenv("ENVIRONMENT", "development")
-show_docs = ENVIRONMENT != "production"
+ENABLE_DOCS = os.getenv("ENABLE_DOCS", "false").lower() in ("true", "1", "t")
 
 app = FastAPI(
     title="GradeGuardian API",
     description="Multi-professor grade management with HMAC integrity checks.",
     version="2.0.0",
-    docs_url="/docs" if show_docs else None,
-    redoc_url="/redoc" if show_docs else None,
-    openapi_url="/openapi.json" if show_docs else None,
+    docs_url="/docs" if ENABLE_DOCS else None,
+    redoc_url="/redoc" if ENABLE_DOCS else None,
+    openapi_url="/openapi.json" if ENABLE_DOCS else None,
 )
+
+if not ENABLE_DOCS:
+    @app.get("/docs", include_in_schema=False)
+    @app.get("/redoc", include_in_schema=False)
+    @app.get("/openapi.json", include_in_schema=False)
+    async def block_docs():
+        raise HTTPException(status_code=404, detail="Not Found")
 
 # Initialize Rate Limiter (e.g., max 100 requests per minute per IP)
 limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
