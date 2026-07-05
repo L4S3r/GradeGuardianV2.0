@@ -104,7 +104,7 @@ def sanitize_sql_input(text: Optional[str]) -> Optional[str]:
     if not text:
         return text
     # Strip dangerous SQL quotes, semicolons, null bytes, and comment operators
-    cleaned = re.sub(r"[\x00'\";\\--]", "", text)
+    cleaned = re.sub(r"[\x00'\";\\]|--", "", text)
     # Rejects suspicious SQL DDL/DML injection payloads
     sql_keywords = r"\b(DROP|ALTER|TRUNCATE|DELETE|INSERT|UPDATE|UNION|EXEC|xp_)\b"
     if re.search(sql_keywords, cleaned, re.IGNORECASE):

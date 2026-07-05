@@ -35,7 +35,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 20),
                 const Text(
-                  'GradeGuardian V2.0',
+                  'GradeGuardian',
                   style: TextStyle(
                     fontSize: 26,
                     fontWeight: FontWeight.w900,
