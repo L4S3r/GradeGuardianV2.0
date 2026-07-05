@@ -45,6 +45,7 @@ except Exception:
 # ─────────────────────────────────────────────────────────────────────────────
 
 SALT_FILE = os.path.join(BASE_DIR, "secret_salt.txt")
+FACULTY_KEY_FILE = os.path.join(BASE_DIR, "faculty_key.txt")
 
 def get_or_create_salt():
     if os.path.exists(SALT_FILE):
@@ -62,6 +63,24 @@ def get_or_create_salt():
         pass
     return new_salt
 
+def get_or_create_faculty_key():
+    """Generates or loads a high-entropy 256-bit cryptographic key for faculty verification."""
+    if os.path.exists(FACULTY_KEY_FILE):
+        try:
+            with open(FACULTY_KEY_FILE, "r") as f:
+                key = f.read().strip()
+                if key:
+                    return key
+        except Exception:
+            pass
+    new_key = f"GG-FACULTY-{secrets.token_urlsafe(32)}"
+    try:
+        with open(FACULTY_KEY_FILE, "w") as f:
+            f.write(new_key)
+    except Exception:
+        pass
+    return new_key
+
 # Get salt from environment or generate/read from file
 SECRET_SALT = os.getenv("SECRET_SALT")
 if not SECRET_SALT:
@@ -73,7 +92,12 @@ JWT_SECRET      = os.getenv("JWT_SECRET", os.getenv("JWT_SECRET_KEY", "gradeguar
 JWT_ALGORITHM   = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
 HMAC_SECRET     = os.getenv("HMAC_SECRET", "gradeguardian_production_hmac_secret_salt_2026_v2").encode('utf-8')
-FACULTY_SECRET_KEY = os.getenv("FACULTY_SECRET_KEY", "DOCTOR-SECURE-2026")
+
+# Get or cryptographically generate Faculty Authorization Key
+FACULTY_SECRET_KEY = os.getenv("FACULTY_SECRET_KEY")
+if not FACULTY_SECRET_KEY:
+    FACULTY_SECRET_KEY = get_or_create_faculty_key()
+    print("[SECURITY] Cryptographic Faculty Key Active:", FACULTY_SECRET_KEY)
 
 def sanitize_sql_input(text: Optional[str]) -> Optional[str]:
     """Sanitizes input parameters against SQL injection patterns, control characters, and unsafe tokens."""
@@ -463,8 +487,8 @@ def get_current_professor(
 @app.post("/auth/register", response_model=TokenResponse, status_code=201)
 @limiter.limit("5/minute")
 async def register(request: Request, data: ProfessorRegister, db: Session = Depends(get_db)):
-    # 2nd Layer Authentication Gate: Verify Faculty Secret Authorization Key
-    if not data.faculty_secret_key or data.faculty_secret_key.strip() != FACULTY_SECRET_KEY:
+    # 2nd Layer Authentication Gate: Constant-time comparison against Cryptographic Faculty Key
+    if not data.faculty_secret_key or not hmac.compare_digest(data.faculty_secret_key.strip(), FACULTY_SECRET_KEY):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Invalid Faculty Secret Authorization Key. Only authorized Alexandria University Doctors/TAs can create professor accounts."
