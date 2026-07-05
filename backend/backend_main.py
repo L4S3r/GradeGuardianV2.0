@@ -85,19 +85,36 @@ def get_or_create_faculty_key():
 SECRET_SALT = os.getenv("SECRET_SALT")
 if not SECRET_SALT:
     SECRET_SALT = get_or_create_salt()
-    print("Using secret salt:", SECRET_SALT)
+    # Note: SECRET_SALT intentionally not logged (M-2 — sensitive material)
+
+IS_PRODUCTION = os.getenv("ENVIRONMENT", os.getenv("VERCEL_ENV", "development")).lower() in ["production", "prod"]
+
+# H-4: SECRET_SALT from filesystem is ephemeral on Vercel serverless — enforce env var in prod
+if IS_PRODUCTION and not os.getenv("SECRET_SALT"):
+    raise RuntimeError("CRITICAL SECURITY ERROR: SECRET_SALT environment variable is required in production.")
 
 # Get JWT secret and security configs from environment
-JWT_SECRET      = os.getenv("JWT_SECRET", os.getenv("JWT_SECRET_KEY", "gradeguardian_production_super_secret_jwt_key_2026_x99"))
+JWT_SECRET = os.getenv("JWT_SECRET", os.getenv("JWT_SECRET_KEY"))
+if not JWT_SECRET:
+    if IS_PRODUCTION:
+        raise RuntimeError("CRITICAL SECURITY ERROR: JWT_SECRET environment variable is required in production.")
+    JWT_SECRET = "gradeguardian_production_super_secret_jwt_key_2026_x99"
+
 JWT_ALGORITHM   = os.getenv("JWT_ALGORITHM", "HS256")
 JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
-HMAC_SECRET     = os.getenv("HMAC_SECRET", "gradeguardian_production_hmac_secret_salt_2026_v2").encode('utf-8')
+
+raw_hmac_secret = os.getenv("HMAC_SECRET")
+if not raw_hmac_secret:
+    if IS_PRODUCTION:
+        raise RuntimeError("CRITICAL SECURITY ERROR: HMAC_SECRET environment variable is required in production.")
+    raw_hmac_secret = "gradeguardian_production_hmac_secret_salt_2026_v2"
+HMAC_SECRET = raw_hmac_secret.encode('utf-8')
 
 # Get or cryptographically generate Faculty Authorization Key
 FACULTY_SECRET_KEY = os.getenv("FACULTY_SECRET_KEY")
 if not FACULTY_SECRET_KEY:
     FACULTY_SECRET_KEY = get_or_create_faculty_key()
-    print("[SECURITY] Cryptographic Faculty Key Active:", FACULTY_SECRET_KEY)
+    # Note: FACULTY_SECRET_KEY intentionally not logged (M-3 — sensitive material)
 
 def sanitize_sql_input(text: Optional[str]) -> Optional[str]:
     """Sanitizes input parameters against SQL injection patterns, control characters, and unsafe tokens."""
@@ -134,19 +151,42 @@ def compute_hash(data_string: str) -> str:
     ).hexdigest()
 
 def hash_password(password: str) -> str:
-    """Simple PBKDF2 password hash (no extra deps needed)."""
-    return hashlib.pbkdf2_hmac(
-        "sha256", password.encode(), SECRET_SALT.encode(), 260_000
-    ).hex()
+    """Hashes a password using bcrypt with automatic per-password unique salt generation.
+    Falls back to per-password PBKDF2 with unique salt if bcrypt is unavailable.
+    """
+    try:
+        import bcrypt
+        return bcrypt.hashpw(password.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
+    except Exception:
+        salt = secrets.token_hex(16)
+        pw_hash = hashlib.pbkdf2_hmac(
+            "sha256", password.encode("utf-8"), (SECRET_SALT + salt).encode("utf-8"), 260_000
+        ).hex()
+        return f"pbkdf2_sha256${salt}${pw_hash}"
 
 def verify_password(plain: str, hashed: str) -> bool:
+    if not hashed:
+        return False
     if hashed.startswith("$2b$") or hashed.startswith("$2a$"):
         try:
             import bcrypt
-            return bcrypt.checkpw(plain.encode(), hashed.encode())
+            return bcrypt.checkpw(plain.encode("utf-8"), hashed.encode("utf-8"))
         except Exception:
-            pass
-    return hash_password(plain) == hashed
+            return False
+    if hashed.startswith("pbkdf2_sha256$"):
+        try:
+            _, salt, pw_hash = hashed.split("$", 2)
+            check = hashlib.pbkdf2_hmac(
+                "sha256", plain.encode("utf-8"), (SECRET_SALT + salt).encode("utf-8"), 260_000
+            ).hex()
+            return hmac.compare_digest(check, pw_hash)
+        except Exception:
+            return False
+    # Backward compatibility for legacy static salt PBKDF2 hashes
+    legacy_hash = hashlib.pbkdf2_hmac(
+        "sha256", plain.encode("utf-8"), SECRET_SALT.encode("utf-8"), 260_000
+    ).hex()
+    return hmac.compare_digest(legacy_hash, hashed)
 
 def create_jwt(subject: str, role: str = "professor") -> str:
     payload = {
@@ -166,9 +206,6 @@ def decode_jwt(token: str) -> dict:
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired — please log in again")
-    except jwt.InvalidTokenError:
-        raise HTTPException(status_code=401, detail="Invalid token")
-
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -284,11 +321,11 @@ Base.metadata.create_all(bind=engine)
 # 3.  PYDANTIC SCHEMAS
 # ─────────────────────────────────────────────────────────────────────────────
 class StudentRegister(BaseModel):
-    name:       str
-    student_id: str
-    department: str
-    email:      str
-    password:   str
+    name:       str = Field(..., max_length=120)
+    student_id: str = Field(..., max_length=50)
+    department: str = Field(..., max_length=100)
+    email:      str = Field(..., max_length=254)
+    password:   str = Field(..., min_length=8, max_length=128)
 
     @field_validator('name', 'student_id', 'department', 'email', mode='before')
     @classmethod
@@ -298,8 +335,8 @@ class StudentRegister(BaseModel):
         return v
 
 class StudentLogin(BaseModel):
-    student_id: str
-    password:   str
+    student_id: str = Field(..., max_length=50)
+    password:   str = Field(..., max_length=128)
 
     @field_validator('student_id', mode='before')
     @classmethod
@@ -317,12 +354,12 @@ class StudentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class ProfessorRegister(BaseModel):
-    name:               str
-    employee_id:        str
-    department:         str
-    email:              str
-    password:           str
-    faculty_secret_key: str = Field(..., description="Faculty authorization secret key required for doctor/TA registration")
+    name:               str = Field(..., max_length=120)
+    employee_id:        str = Field(..., max_length=50)
+    department:         str = Field(..., max_length=100)
+    email:              str = Field(..., max_length=254)
+    password:           str = Field(..., min_length=8, max_length=128)
+    faculty_secret_key: str = Field(..., max_length=256, description="Faculty authorization secret key required for doctor/TA registration")
 
     @field_validator('name', 'employee_id', 'department', 'email', mode='before')
     @classmethod
@@ -332,8 +369,8 @@ class ProfessorRegister(BaseModel):
         return v
 
 class ProfessorLogin(BaseModel):
-    email:    str
-    password: str
+    email:    str = Field(..., max_length=254)
+    password: str = Field(..., max_length=128)
 
     @field_validator('email', mode='before')
     @classmethod
@@ -356,29 +393,29 @@ class TokenResponse(BaseModel):
     professor:    ProfessorResponse
 
 class GradeCreate(BaseModel):
-    student_id:   str
-    course_name:  str
-    course_code:  str
-    grade:        float
-    letter_grade: str
+    student_id:   str   = Field(..., max_length=50)
+    course_name:  str   = Field(..., max_length=150)
+    course_code:  str   = Field(..., max_length=20)
+    grade:        float = Field(..., ge=0.0, le=100.0)
+    letter_grade: str   = Field(..., max_length=5)
 
 class GradeUpdate(BaseModel):
-    grade:        float
-    letter_grade: str
+    grade:        float = Field(..., ge=0.0, le=100.0)
+    letter_grade: str   = Field(..., max_length=5)
 
 class GradeResponse(GradeCreate):
     id:           str
     professor_id: Optional[str] = None
     recorded_at:  datetime
-    hash:         str
-    original_grade: Optional[float] = None  # Original grade before tampering
-    original_letter_grade: Optional[str] = None  # Original letter grade before tampering
+    # hash intentionally excluded from client responses (M-4 — HMAC oracle prevention)
+    original_grade: Optional[float] = None
+    original_letter_grade: Optional[str] = None
     is_verified:  bool = Field(default=True)
     model_config  = ConfigDict(from_attributes=True)
 
 class CourseCreate(BaseModel):
-    course_code: str
-    course_name: str
+    course_code: str = Field(..., max_length=20)
+    course_name: str = Field(..., max_length=150)
 
 class CourseResponse(CourseCreate):
     id:           str
@@ -386,7 +423,11 @@ class CourseResponse(CourseCreate):
     model_config  = ConfigDict(from_attributes=True)
 
 class BatchGradeCreate(BaseModel):
-    grades: List[GradeCreate]
+    grades: List[GradeCreate] = Field(..., max_length=100)
+
+# C-2 / H-1: Authenticated batch verification with bounded input
+class BatchVerifyRequest(BaseModel):
+    grade_ids: List[str] = Field(..., max_length=100, description="Maximum 100 grade IDs per request")
 
 class AuditLogResponse(BaseModel):
     grade_id:      str
@@ -418,8 +459,31 @@ if not ENABLE_DOCS:
     async def block_docs():
         raise HTTPException(status_code=404, detail="Not Found")
 
-# Initialize Rate Limiter (e.g., max 100 requests per minute per IP)
-limiter = Limiter(key_func=get_remote_address, default_limits=["100/minute"])
+def get_real_client_ip(request: Request) -> str:
+    """Extracts the true client IP address when deployed behind Vercel, Cloudflare, or reverse proxies.
+    Parses CF-Connecting-IP, X-Forwarded-For (leftmost IP), and X-Real-IP headers, falling back to get_remote_address.
+    """
+    if not request:
+        return "127.0.0.1"
+
+    cf_ip = request.headers.get("cf-connecting-ip")
+    if cf_ip:
+        return cf_ip.strip()
+
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        client_ip = forwarded_for.split(",")[0].strip()
+        if client_ip:
+            return client_ip
+
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+
+    return get_remote_address(request)
+
+# Initialize Rate Limiter with reverse-proxy aware IP resolution (e.g., max 100 requests per minute per IP)
+limiter = Limiter(key_func=get_real_client_ip, default_limits=["100/minute"])
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 app.add_middleware(SlowAPIMiddleware)
@@ -428,20 +492,28 @@ app.add_middleware(SlowAPIMiddleware)
 async def add_security_headers(request, call_next):
     response = await call_next(request)
     response.headers["Strict-Transport-Security"] = "max-age=31536000; includeSubDomains"
-    response.headers["X-Content-Type-Options"] = "nosniff"
-    response.headers["X-Frame-Options"] = "DENY"
-    response.headers["X-XSS-Protection"] = "1; mode=block"
+    response.headers["X-Content-Type-Options"]     = "nosniff"
+    response.headers["X-Frame-Options"]            = "DENY"
+    response.headers["Referrer-Policy"]            = "strict-origin-when-cross-origin"
+    # L-1: Replace deprecated X-XSS-Protection with a proper Content-Security-Policy
+    response.headers["Content-Security-Policy"]    = "default-src 'none'; frame-ancestors 'none'"
     return response
 
-raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
-ALLOWED_ORIGINS = ["*"] if raw_origins.strip() == "*" else [o.strip() for o in raw_origins.split(",") if o.strip()]
+raw_origins = os.getenv("ALLOWED_ORIGINS", "https://gradeguardian.vercel.app,http://localhost:3000,http://localhost:5173,http://localhost:8000")
+if raw_origins.strip() == "*":
+    ALLOWED_ORIGINS = ["*"]
+    ALLOW_CREDENTIALS = False
+else:
+    ALLOWED_ORIGINS = [o.strip() for o in raw_origins.split(",") if o.strip()]
+    ALLOW_CREDENTIALS = True
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_credentials=ALLOW_CREDENTIALS,
+    # L-2: Explicit method list instead of wildcard
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "Accept"],
 )
 
 bearer_scheme = HTTPBearer(auto_error=False)
@@ -580,12 +652,15 @@ async def get_grades(
         current_hash = compute_hash(data_str)
         is_verified  = (current_hash == g.hash)
 
-        db.add(AuditLogDB(
-            grade_id      = g.id,
-            action        = "Automatic Integrity Check",
-            status        = "PASS" if is_verified else "FAIL",
-            error_details = None if is_verified else "Hash mismatch",
-        ))
+        # H-3: Only write audit log entry when tampering is detected (FAIL), not on every successful read.
+        # Writing on every PASS bloats audit_logs and creates a DoS surface.
+        if not is_verified:
+            db.add(AuditLogDB(
+                grade_id      = g.id,
+                action        = "Automatic Integrity Check",
+                status        = "FAIL",
+                error_details = "Hash mismatch detected",
+            ))
         results.append({
             "id":           g.id,
             "professor_id": g.professor_id,
@@ -597,7 +672,7 @@ async def get_grades(
             "original_grade": g.original_grade,
             "original_letter_grade": g.original_letter_grade,
             "recorded_at":  g.recorded_at.isoformat(),
-            "hash":         g.hash,
+            # hash excluded from response (M-4 — HMAC oracle prevention)
             "is_verified":  is_verified,
         })
 
@@ -606,7 +681,9 @@ async def get_grades(
 
 
 @app.post("/grades", response_model=GradeResponse, status_code=201)
+@limiter.limit("30/minute")  # L-4: explicit rate limit on single grade creation
 async def create_grade(
+    request: Request,
     grade_data: GradeCreate,
     db: Session = Depends(get_db),
     current: ProfessorDB = Depends(get_current_professor),
@@ -637,7 +714,9 @@ async def create_grade(
     return db_grade
 
 @app.post("/grades/batch", response_model=List[GradeResponse], status_code=201)
+@limiter.limit("20/minute")
 async def create_batch_grades(
+    request: Request,
     batch_data: BatchGradeCreate,
     db: Session = Depends(get_db),
     current: ProfessorDB = Depends(get_current_professor),
@@ -737,20 +816,36 @@ def get_grade_logs(
     db: Session = Depends(get_db),
     current: ProfessorDB = Depends(get_current_professor),
 ):
-    logs = db.query(AuditLogDB).filter(AuditLogDB.grade_id == grade_id).all()
-    return {"logs": logs}
+    # H-2: Verify the grade belongs to the requesting professor before returning logs
+    grade = db.query(GradeDB).filter(
+        GradeDB.id == grade_id,
+        GradeDB.professor_id == current.id,
+    ).first()
+    if not grade:
+        raise HTTPException(status_code=404, detail="Grade not found")
+    logs = db.query(AuditLogDB).filter(AuditLogDB.grade_id == grade_id).order_by(
+        AuditLogDB.checked_at.desc()
+    ).limit(50).all()
+    return {"logs": [AuditLogResponse.model_validate(l).model_dump() for l in logs]}
 
 
 @app.post("/verify/batch")
+@limiter.limit("20/minute")
 async def verify_batch(
-    data: dict,
+    request: Request,
+    # C-2: Require authentication + typed schema with bounded list (max 100 IDs)
+    data: BatchVerifyRequest,
     db: Session = Depends(get_db),
+    current: ProfessorDB = Depends(get_current_professor),
 ):
-    grade_ids = data.get("grade_ids", [])
-    results   = []
+    results = []
 
-    for g_id in grade_ids:
-        grade = db.query(GradeDB).filter(GradeDB.id == g_id).first()
+    for g_id in data.grade_ids:
+        # Scope to the calling professor's grades only
+        grade = db.query(GradeDB).filter(
+            GradeDB.id == g_id,
+            GradeDB.professor_id == current.id,
+        ).first()
         if not grade:
             results.append({"grade_id": g_id, "is_valid": False, "error": "Not found"})
             continue
@@ -759,12 +854,14 @@ async def verify_batch(
         current_hash = compute_hash(data_string)
         is_valid     = (current_hash == grade.hash)
 
-        db.add(AuditLogDB(
-            grade_id      = grade.id,
-            action        = "Batch Verification",
-            status        = "PASS" if is_valid else "FAIL",
-            error_details = None if is_valid else "Integrity mismatch",
-        ))
+        # Only write audit entry for failures (consistent with H-3 policy)
+        if not is_valid:
+            db.add(AuditLogDB(
+                grade_id      = grade.id,
+                action        = "Batch Verification",
+                status        = "FAIL",
+                error_details = "Integrity mismatch detected",
+            ))
         results.append({
             "grade_id": grade.id,
             "is_valid": is_valid,
@@ -806,7 +903,7 @@ async def student_register(request: Request, data: StudentRegister, db: Session 
 
 
 @app.post("/student/login")
-@limiter.limit("10/minute")
+@limiter.limit("5/minute")  # L-3: match professor login rate limit
 async def student_login(request: Request, data: StudentLogin, db: Session = Depends(get_db)):
     student = db.query(StudentDB).filter(StudentDB.student_id == data.student_id).first()
     if not student or not verify_password(data.password, student.password_hash):
@@ -842,12 +939,14 @@ async def get_my_grades(
             g.grade, g.letter_grade, g.recorded_at.isoformat()
         )
         is_verified = (compute_hash(data_str) == g.hash)
-        db.add(AuditLogDB(
-            grade_id=g.id,
-            action="Student View",
-            status="PASS" if is_verified else "FAIL",
-            error_details=None if is_verified else "Hash mismatch detected on student view",
-        ))
+        # H-3 (student side): Only log FAIL events to prevent audit log flooding
+        if not is_verified:
+            db.add(AuditLogDB(
+                grade_id=g.id,
+                action="Student View",
+                status="FAIL",
+                error_details="Hash mismatch detected on student view",
+            ))
         results.append({
             "id": g.id,
             "professor_id": g.professor_id,
@@ -859,7 +958,7 @@ async def get_my_grades(
             "original_letter_grade": g.original_letter_grade,
             "letter_grade": g.letter_grade,
             "recorded_at": g.recorded_at,
-            "hash": g.hash,
+            # hash excluded from response (M-4 — HMAC oracle prevention)
             "is_verified": is_verified,
         })
     db.commit()
@@ -963,11 +1062,31 @@ async def root():
     return {"message": "GradeGuardian API is online", "status": "Secure"}
 
 @app.post("/admin/rehash-grades")
+@limiter.limit("5/minute")
 async def rehash_grades(
+    request: Request,
     db: Session = Depends(get_db),
-    current: ProfessorDB = Depends(get_current_professor),  # must be authenticated
+    current: ProfessorDB = Depends(get_current_professor),
 ):
-    grades = db.query(GradeDB).all()
+    """C-1: Recomputes HMAC hashes for the calling professor's grades only.
+    Requires ADMIN_KEY header for a second layer of authorization to prevent
+    any authenticated professor from tampering with global grade integrity.
+    """
+    admin_key = os.getenv("ADMIN_KEY")
+    provided_key = request.headers.get("X-Admin-Key", "")
+
+    # Fail securely: if ADMIN_KEY is not configured, block the operation entirely
+    if not admin_key:
+        raise HTTPException(
+            status_code=503,
+            detail="Admin operations are disabled: ADMIN_KEY environment variable is not configured.",
+        )
+    # Constant-time comparison to prevent timing attacks on the key
+    if not hmac.compare_digest(provided_key.strip(), admin_key.strip()):
+        raise HTTPException(status_code=403, detail="Invalid admin authorization key.")
+
+    # Scope to the calling professor's grades only — never all grades globally
+    grades = db.query(GradeDB).filter(GradeDB.professor_id == current.id).all()
     for g in grades:
         data_str = build_grade_data_string(
             g.id, g.student_id, g.course_code,
@@ -975,7 +1094,8 @@ async def rehash_grades(
         )
         g.hash = compute_hash(data_str)
     db.commit()
-    return {"recomputed": len(grades)}
+    return {"recomputed": len(grades), "professor_id": current.id}
+
 
 
 if __name__ == "__main__":
