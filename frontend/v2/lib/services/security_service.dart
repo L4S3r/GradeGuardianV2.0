@@ -130,9 +130,8 @@ class CertificatePinningConfig {
   /// Also populate [allowedCertificates] with your server's SHA-256 fingerprints.
   static const String productionUrl = 'https://gradeguardianv2-0.onrender.com';
 
-  /// Development API URL — set to Render so debug builds also reach the backend.
-  /// Switch back to 'http://localhost:8000' if you run the server locally.
-  static const String developmentUrl = 'https://gradeguardianv2-0.onrender.com';
+  /// Development API URL — set to http://localhost:8000 for local development.
+  static const String developmentUrl = 'http://localhost:8000';
   
   /// Get the appropriate URL based on build mode
   static String get apiUrl {

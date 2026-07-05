@@ -9,31 +9,69 @@ from fastapi import FastAPI, Depends, HTTPException, status, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import create_engine, Column, String, Float, DateTime, Integer, ForeignKey, inspect, text, or_
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker, Session
+from sqlalchemy.orm import declarative_base, sessionmaker, Session
 from pydantic import BaseModel, ConfigDict, Field
 import jwt
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
+from dotenv import load_dotenv
+
+# Determine backend directory path
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Load environment variables from .env file inside backend directory
+env_path = os.path.join(BASE_DIR, ".env")
+if os.path.exists(env_path):
+    load_dotenv(dotenv_path=env_path)
+else:
+    load_dotenv()
+
+# Initialize Supabase Client (if credentials present)
+try:
+    from supabase import create_client, Client
+    SUPABASE_URL = os.getenv("SUPABASE_URL")
+    SUPABASE_KEY = os.getenv("SUPABASE_KEY")
+    supabase_client: Optional[Client] = (
+        create_client(SUPABASE_URL, SUPABASE_KEY) if (SUPABASE_URL and SUPABASE_KEY) else None
+    )
+except Exception:
+    supabase_client = None
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1.  SECURITY SETUP
 # ─────────────────────────────────────────────────────────────────────────────
-SALT_FILE = "secret_salt.txt"
+
+SALT_FILE = os.path.join(BASE_DIR, "secret_salt.txt")
 
 def get_or_create_salt():
     if os.path.exists(SALT_FILE):
-        with open(SALT_FILE, "r") as f:
-            return f.read().strip()
+        try:
+            with open(SALT_FILE, "r") as f:
+                return f.read().strip()
+        except Exception:
+            pass
     new_salt = secrets.token_hex(32)
-    with open(SALT_FILE, "w") as f:
-        f.write(new_salt)
+    try:
+        with open(SALT_FILE, "w") as f:
+            f.write(new_salt)
+    except Exception:
+        # Read-only filesystem (e.g. Vercel Lambda execution)
+        pass
     return new_salt
 
-SECRET_SALT = os.environ["SECRET_SALT"]
-JWT_SECRET  = os.environ["JWT_SECRET"]   # sign tokens
+# Get salt from environment or generate/read from file
+SECRET_SALT = os.getenv("SECRET_SALT")
+if not SECRET_SALT:
+    SECRET_SALT = get_or_create_salt()
+    print("Using secret salt:", SECRET_SALT)
+
+# Get JWT secret from environment
+JWT_SECRET = os.getenv("JWT_SECRET", "default-fallback-jwt-secret-key-change-in-production")
+if not JWT_SECRET:
+    raise ValueError("JWT_SECRET environment variable is not set")
+
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRE_HOURS = 72   # professors stay logged in for 3 days
 
@@ -63,20 +101,30 @@ def hash_password(password: str) -> str:
     ).hex()
 
 def verify_password(plain: str, hashed: str) -> bool:
+    if hashed.startswith("$2b$") or hashed.startswith("$2a$"):
+        try:
+            import bcrypt
+            return bcrypt.checkpw(plain.encode(), hashed.encode())
+        except Exception:
+            pass
     return hash_password(plain) == hashed
 
-def create_jwt(professor_id: str) -> str:
+def create_jwt(subject: str, role: str = "professor") -> str:
     payload = {
-        "sub": professor_id,
+        "sub": subject,
+        "role": role,
         "exp": datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRE_HOURS),
+        "iat": datetime.now(timezone.utc),
     }
     return jwt.encode(payload, JWT_SECRET, algorithm=JWT_ALGORITHM)
 
-def decode_jwt(token: str) -> str:
-    """Returns professor_id or raises HTTPException."""
+def decode_jwt(token: str) -> dict:
+    """Returns JWT payload dictionary or raises HTTPException."""
     try:
         payload = jwt.decode(token, JWT_SECRET, algorithms=[JWT_ALGORITHM])
-        return payload["sub"]
+        if "role" not in payload:
+            payload["role"] = "professor"
+        return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired — please log in again")
     except jwt.InvalidTokenError:
@@ -84,15 +132,45 @@ def decode_jwt(token: str) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 2.  DATABASE SETUP
+# 2.  DATABASE SETUP (SQLite / Supabase PostgreSQL)
 # ─────────────────────────────────────────────────────────────────────────────
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./grades.db")
+DEFAULT_DB_PATH = os.path.join(BASE_DIR, "grades.db")
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DEFAULT_DB_PATH}")
+
+if not DATABASE_URL or "[YOUR-PASSWORD]" in DATABASE_URL or "[password]" in DATABASE_URL:
+    DATABASE_URL = f"sqlite:///{DEFAULT_DB_PATH}"
+
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-engine       = create_engine(DATABASE_URL, connect_args={"check_same_thread": False} if "sqlite" in DATABASE_URL else {})
+engine_kwargs = {}
+if "sqlite" in DATABASE_URL:
+    engine_kwargs["connect_args"] = {"check_same_thread": False}
+else:
+    # Optimized for Supabase PostgreSQL pooler & Vercel serverless environment
+    engine_kwargs["pool_pre_ping"] = True
+    engine_kwargs["pool_recycle"] = 300
+
+engine       = create_engine(DATABASE_URL, **engine_kwargs)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base         = declarative_base()
+
+if "sqlite" in DATABASE_URL:
+    print("[INFO] Database Engine: Local SQLite (grades.db)")
+else:
+    db_target = DATABASE_URL.split('@')[-1] if '@' in DATABASE_URL else "PostgreSQL"
+    print(f"[INFO] Database Engine: Remote Supabase PostgreSQL ({db_target})")
+
+
+class StudentDB(Base):
+    __tablename__ = "students"
+    id            = Column(String, primary_key=True, index=True)
+    student_id    = Column(String, unique=True, nullable=False, index=True)
+    name          = Column(String, nullable=False)
+    email         = Column(String, unique=True, nullable=False, index=True)
+    department    = Column(String, nullable=False)
+    password_hash = Column(String, nullable=False)
+    created_at    = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
 class ProfessorDB(Base):
@@ -163,6 +241,25 @@ Base.metadata.create_all(bind=engine)
 # ─────────────────────────────────────────────────────────────────────────────
 # 3.  PYDANTIC SCHEMAS
 # ─────────────────────────────────────────────────────────────────────────────
+class StudentRegister(BaseModel):
+    name:       str
+    student_id: str
+    department: str
+    email:      str
+    password:   str
+
+class StudentLogin(BaseModel):
+    student_id: str
+    password:   str
+
+class StudentOut(BaseModel):
+    id:         str
+    student_id: str
+    name:       str
+    email:      str
+    department: str
+    model_config = ConfigDict(from_attributes=True)
+
 class ProfessorRegister(BaseModel):
     name:        str
     employee_id: str
@@ -259,16 +356,14 @@ async def add_security_headers(request, call_next):
     response.headers["X-XSS-Protection"] = "1; mode=block"
     return response
 
-ALLOWED_ORIGINS = os.getenv(
-    "ALLOWED_ORIGINS",
-    "http://localhost:3000,http://localhost:8080,https://gradeguardianv2-0.onrender.com"
-).split(",")
+raw_origins = os.getenv("ALLOWED_ORIGINS", "*")
+ALLOWED_ORIGINS = ["*"] if raw_origins.strip() == "*" else [o.strip() for o in raw_origins.split(",") if o.strip()]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -281,14 +376,27 @@ def get_db():
     finally:
         db.close()
 
+def get_current_user_payload(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
+) -> dict:
+    if not credentials:
+        raise HTTPException(status_code=401, detail="Not authenticated")
+    return decode_jwt(credentials.credentials)
+
+def require_student(payload: dict = Depends(get_current_user_payload)) -> dict:
+    if payload.get("role") != "student":
+        raise HTTPException(status_code=403, detail="Students only")
+    return payload
+
 def get_current_professor(
     credentials: Optional[HTTPAuthorizationCredentials] = Depends(bearer_scheme),
     db: Session = Depends(get_db),
 ) -> ProfessorDB:
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
-    professor_id = decode_jwt(credentials.credentials)
-    professor = db.query(ProfessorDB).filter(ProfessorDB.id == professor_id).first()
+    payload = decode_jwt(credentials.credentials)
+    prof_id = payload.get("sub") if isinstance(payload, dict) else payload
+    professor = db.query(ProfessorDB).filter(ProfessorDB.id == prof_id).first()
     if not professor:
         raise HTTPException(status_code=401, detail="Professor not found")
     return professor
@@ -544,13 +652,12 @@ def get_grade_logs(
 async def verify_batch(
     data: dict,
     db: Session = Depends(get_db),
-    current: ProfessorDB = Depends(get_current_professor),
 ):
     grade_ids = data.get("grade_ids", [])
     results   = []
 
     for g_id in grade_ids:
-        grade = db.query(GradeDB).filter(GradeDB.id == g_id, GradeDB.professor_id == current.id).first()
+        grade = db.query(GradeDB).filter(GradeDB.id == g_id).first()
         if not grade:
             results.append({"grade_id": g_id, "is_valid": False, "error": "Not found"})
             continue
@@ -572,7 +679,119 @@ async def verify_batch(
         })
 
     db.commit()
+    return {"results": results, "status": "success"}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 6.  STUDENT ENDPOINTS
+# ─────────────────────────────────────────────────────────────────────────────
+@app.post("/student/register", status_code=201)
+@limiter.limit("5/minute")
+async def student_register(request: Request, data: StudentRegister, db: Session = Depends(get_db)):
+    if db.query(StudentDB).filter(StudentDB.student_id == data.student_id).first():
+        raise HTTPException(400, "Student ID already registered")
+    if db.query(StudentDB).filter(StudentDB.email == data.email).first():
+        raise HTTPException(400, "Email already registered")
+
+    student = StudentDB(
+        id=str(uuid.uuid4()),
+        student_id=data.student_id,
+        name=data.name,
+        email=data.email,
+        department=data.department,
+        password_hash=hash_password(data.password),
+    )
+    db.add(student)
+    db.commit()
+    db.refresh(student)
+
+    token = create_jwt(subject=student.student_id, role="student")
+    return {
+        "access_token": token,
+        "student": StudentOut.model_validate(student).model_dump()
+    }
+
+
+@app.post("/student/login")
+@limiter.limit("10/minute")
+async def student_login(request: Request, data: StudentLogin, db: Session = Depends(get_db)):
+    student = db.query(StudentDB).filter(StudentDB.student_id == data.student_id).first()
+    if not student or not verify_password(data.password, student.password_hash):
+        raise HTTPException(401, "Invalid Student ID or password")
+
+    token = create_jwt(subject=student.student_id, role="student")
+    return {
+        "access_token": token,
+        "student": StudentOut.model_validate(student).model_dump()
+    }
+
+
+@app.get("/student/me")
+async def student_me(payload: dict = Depends(require_student), db: Session = Depends(get_db)):
+    student_id = payload.get("sub")
+    student = db.query(StudentDB).filter(StudentDB.student_id == student_id).first()
+    if not student:
+        raise HTTPException(404, "Student not found")
+    return StudentOut.model_validate(student).model_dump()
+
+
+@app.get("/student/grades", response_model=List[GradeResponse])
+async def get_my_grades(
+    payload: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    student_id = payload.get("sub")
+    grades = db.query(GradeDB).filter(GradeDB.student_id == student_id).all()
+    results = []
+    for g in grades:
+        data_str = build_grade_data_string(
+            g.id, g.student_id, g.course_code,
+            g.grade, g.letter_grade, g.recorded_at.isoformat()
+        )
+        is_verified = (compute_hash(data_str) == g.hash)
+        db.add(AuditLogDB(
+            grade_id=g.id,
+            action="Student View",
+            status="PASS" if is_verified else "FAIL",
+            error_details=None if is_verified else "Hash mismatch detected on student view",
+        ))
+        results.append({
+            "id": g.id,
+            "professor_id": g.professor_id,
+            "student_id": g.student_id,
+            "course_name": g.course_name,
+            "course_code": g.course_code,
+            "grade": g.grade,
+            "original_grade": g.original_grade,
+            "original_letter_grade": g.original_letter_grade,
+            "letter_grade": g.letter_grade,
+            "recorded_at": g.recorded_at,
+            "hash": g.hash,
+            "is_verified": is_verified,
+        })
+    db.commit()
     return results
+
+
+@app.get("/student/grades/{grade_id}/logs")
+async def get_my_grade_logs(
+    grade_id: str,
+    payload: dict = Depends(require_student),
+    db: Session = Depends(get_db),
+):
+    student_id = payload.get("sub")
+    grade = db.query(GradeDB).filter(
+        GradeDB.id == grade_id,
+        GradeDB.student_id == student_id,
+    ).first()
+    if not grade:
+        raise HTTPException(404, "Grade not found")
+
+    logs = db.query(AuditLogDB).filter(AuditLogDB.grade_id == grade_id).order_by(
+        AuditLogDB.checked_at.desc()
+    ).limit(20).all()
+
+    return {"logs": [AuditLogResponse.model_validate(l).model_dump() for l in logs]}
 
 
 @app.get("/audit-logs", response_model=List[AuditLogResponse])

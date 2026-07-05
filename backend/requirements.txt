@@ -4,7 +4,8 @@ sqlalchemy
 pydantic
 psycopg2-binary
 PyJWT
+supabase
 
 # Security & Rate Limiting
 slowapi
-dotenv
+python-dotenv
