@@ -26,16 +26,18 @@ class ApiService {
     required String department,
     required String email,
     required String password,
+    required String facultySecretKey,
   }) async {
     final response = await http.post(
       Uri.parse('$baseUrl/auth/register'),
       headers: _headers,
       body: jsonEncode({
-        'name':        name,
-        'employee_id': employeeId,
-        'department':  department,
-        'email':       email,
-        'password':    password,
+        'name':               name,
+        'employee_id':        employeeId,
+        'department':         department,
+        'email':              email,
+        'password':           password,
+        'faculty_secret_key': facultySecretKey,
       }),
     );
     if (response.statusCode == 201 || response.statusCode == 200) {

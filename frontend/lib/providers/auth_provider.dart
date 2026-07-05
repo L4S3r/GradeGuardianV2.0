@@ -53,16 +53,18 @@ class AuthProvider extends ChangeNotifier {
     required String department,
     required String email,
     required String password,
+    required String facultySecretKey,
   }) async {
     _error = null;
     notifyListeners();
     try {
       final result = await _api.register(
-        name:       name,
-        employeeId: employeeId,
-        department: department,
-        email:      email,
-        password:   password,
+        name:             name,
+        employeeId:       employeeId,
+        department:       department,
+        email:            email,
+        password:         password,
+        facultySecretKey: facultySecretKey,
       );
       await _saveSession(result['access_token'], result['professor']);
       return true;

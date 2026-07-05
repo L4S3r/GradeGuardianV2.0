@@ -2,6 +2,7 @@ import hmac
 import hashlib
 import secrets
 import os
+import re
 import uuid
 from typing import List, Optional
 from datetime import datetime, timezone, timedelta
@@ -10,7 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy import create_engine, Column, String, Float, DateTime, Integer, ForeignKey, inspect, text, or_
 from sqlalchemy.orm import declarative_base, sessionmaker, Session
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 import jwt
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.util import get_remote_address
@@ -67,19 +68,26 @@ if not SECRET_SALT:
     SECRET_SALT = get_or_create_salt()
     print("Using secret salt:", SECRET_SALT)
 
-# Get JWT secret from environment
-JWT_SECRET_KEY  = os.getenv("JWT_SECRET_KEY", "gradeguardian_production_super_secret_jwt_key_2026_x99")
-HMAC_SECRET = os.getenv("HMAC_SECRET",     "gradeguardian_production_hmac_secret_salt_2026_v2").encode('utf-8')
+# Get JWT secret and security configs from environment
+JWT_SECRET      = os.getenv("JWT_SECRET", os.getenv("JWT_SECRET_KEY", "gradeguardian_production_super_secret_jwt_key_2026_x99"))
+JWT_ALGORITHM   = os.getenv("JWT_ALGORITHM", "HS256")
+JWT_EXPIRE_HOURS = int(os.getenv("JWT_EXPIRE_HOURS", "24"))
+HMAC_SECRET     = os.getenv("HMAC_SECRET", "gradeguardian_production_hmac_secret_salt_2026_v2").encode('utf-8')
 FACULTY_SECRET_KEY = os.getenv("FACULTY_SECRET_KEY", "DOCTOR-SECURE-2026")
-ALGORITHM   = "HS256"
-TOKEN_EXPIRE_HOURS = 24
 
 def sanitize_sql_input(text: Optional[str]) -> Optional[str]:
-    """Sanitizes input parameters against SQL injection patterns and unsafe control tokens."""
+    """Sanitizes input parameters against SQL injection patterns, control characters, and unsafe tokens."""
     if not text:
         return text
-    # Strip dangerous SQL quotes, semicolons, and comment operators
-    cleaned = re.sub(r"['\";\\--]", "", text)
+    # Strip dangerous SQL quotes, semicolons, null bytes, and comment operators
+    cleaned = re.sub(r"[\x00'\";\\--]", "", text)
+    # Rejects suspicious SQL DDL/DML injection payloads
+    sql_keywords = r"\b(DROP|ALTER|TRUNCATE|DELETE|INSERT|UPDATE|UNION|EXEC|xp_)\b"
+    if re.search(sql_keywords, cleaned, re.IGNORECASE):
+        raise HTTPException(
+            status_code=400,
+            detail="Potential SQL injection payload or unauthorized character sequence detected."
+        )
     return cleaned.strip()
 
 # Use this identical function in BOTH backends
@@ -93,6 +101,7 @@ def build_grade_data_string(grade_id, student_id, course_code, grade, letter_gra
     
     grade_val = "{:.1f}".format(float(grade))
     return f"{grade_id}|{student_id}|{course_code}|{grade_val}|{letter_grade}|{ts_str}"
+
 def compute_hash(data_string: str) -> str:
     return hmac.new(
         SECRET_SALT.encode(),
@@ -133,6 +142,9 @@ def decode_jwt(token: str) -> dict:
         return payload
     except jwt.ExpiredSignatureError:
         raise HTTPException(status_code=401, detail="Token expired — please log in again")
+    except jwt.InvalidTokenError:
+        raise HTTPException(status_code=401, detail="Invalid token")
+
     except jwt.InvalidTokenError:
         raise HTTPException(status_code=401, detail="Invalid token")
 
@@ -254,9 +266,23 @@ class StudentRegister(BaseModel):
     email:      str
     password:   str
 
+    @field_validator('name', 'student_id', 'department', 'email', mode='before')
+    @classmethod
+    def validate_sql_safety(cls, v: str) -> str:
+        if isinstance(v, str):
+            sanitize_sql_input(v)
+        return v
+
 class StudentLogin(BaseModel):
     student_id: str
     password:   str
+
+    @field_validator('student_id', mode='before')
+    @classmethod
+    def validate_sql_safety(cls, v: str) -> str:
+        if isinstance(v, str):
+            sanitize_sql_input(v)
+        return v
 
 class StudentOut(BaseModel):
     id:         str
@@ -267,15 +293,30 @@ class StudentOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class ProfessorRegister(BaseModel):
-    name:        str
-    employee_id: str
-    department:  str
-    email:       str
-    password:    str
+    name:               str
+    employee_id:        str
+    department:         str
+    email:              str
+    password:           str
+    faculty_secret_key: str = Field(..., description="Faculty authorization secret key required for doctor/TA registration")
+
+    @field_validator('name', 'employee_id', 'department', 'email', mode='before')
+    @classmethod
+    def validate_sql_safety(cls, v: str) -> str:
+        if isinstance(v, str):
+            sanitize_sql_input(v)
+        return v
 
 class ProfessorLogin(BaseModel):
     email:    str
     password: str
+
+    @field_validator('email', mode='before')
+    @classmethod
+    def validate_sql_safety(cls, v: str) -> str:
+        if isinstance(v, str):
+            sanitize_sql_input(v)
+        return v
 
 class ProfessorResponse(BaseModel):
     id:          str
@@ -407,6 +448,8 @@ def get_current_professor(
     if not credentials:
         raise HTTPException(status_code=401, detail="Not authenticated")
     payload = decode_jwt(credentials.credentials)
+    if payload.get("role") != "professor":
+        raise HTTPException(status_code=403, detail="Forbidden: Professor role required")
     prof_id = payload.get("sub") if isinstance(payload, dict) else payload
     professor = db.query(ProfessorDB).filter(ProfessorDB.id == prof_id).first()
     if not professor:
@@ -420,18 +463,31 @@ def get_current_professor(
 @app.post("/auth/register", response_model=TokenResponse, status_code=201)
 @limiter.limit("5/minute")
 async def register(request: Request, data: ProfessorRegister, db: Session = Depends(get_db)):
-    # Check duplicates
-    if db.query(ProfessorDB).filter(ProfessorDB.email == data.email).first():
+    # 2nd Layer Authentication Gate: Verify Faculty Secret Authorization Key
+    if not data.faculty_secret_key or data.faculty_secret_key.strip() != FACULTY_SECRET_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid Faculty Secret Authorization Key. Only authorized Alexandria University Doctors/TAs can create professor accounts."
+        )
+
+    # Sanitize input fields against SQL injection
+    clean_name = sanitize_sql_input(data.name)
+    clean_emp_id = sanitize_sql_input(data.employee_id)
+    clean_dept = sanitize_sql_input(data.department)
+    clean_email = sanitize_sql_input(data.email)
+
+    # Check duplicates using parameterized queries
+    if db.query(ProfessorDB).filter(ProfessorDB.email == clean_email).first():
         raise HTTPException(status_code=400, detail="Email already registered")
-    if db.query(ProfessorDB).filter(ProfessorDB.employee_id == data.employee_id).first():
+    if db.query(ProfessorDB).filter(ProfessorDB.employee_id == clean_emp_id).first():
         raise HTTPException(status_code=400, detail="Employee ID already registered")
 
     professor = ProfessorDB(
         id            = str(uuid.uuid4()),
-        name          = data.name,
-        employee_id   = data.employee_id,
-        department    = data.department,
-        email         = data.email,
+        name          = clean_name,
+        employee_id   = clean_emp_id,
+        department    = clean_dept,
+        email         = clean_email,
         password_hash = hash_password(data.password),
     )
     db.add(professor)
@@ -480,16 +536,17 @@ async def get_grades(
 
     # Advanced Multi-field Search
     if search:
-        search_filter = f"%{search}%"
+        clean_search = sanitize_sql_input(search)
+        search_filter = f"%{clean_search}%"
         query = query.filter(or_(
             GradeDB.student_id.ilike(search_filter),
             GradeDB.course_code.ilike(search_filter),
             GradeDB.course_name.ilike(search_filter)
         ))
     else:
-        if student_id: query = query.filter(GradeDB.student_id.contains(student_id))
-        if course_code: query = query.filter(GradeDB.course_code.contains(course_code))
-        if course_name: query = query.filter(GradeDB.course_name.contains(course_name))
+        if student_id: query = query.filter(GradeDB.student_id.contains(sanitize_sql_input(student_id)))
+        if course_code: query = query.filter(GradeDB.course_code.contains(sanitize_sql_input(course_code)))
+        if course_name: query = query.filter(GradeDB.course_name.contains(sanitize_sql_input(course_name)))
 
     grades  = query.all()
     results = []

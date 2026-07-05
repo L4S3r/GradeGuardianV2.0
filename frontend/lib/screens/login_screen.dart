@@ -251,6 +251,7 @@ class _RegisterFormState extends State<_RegisterForm> {
   final _departmentController = TextEditingController();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _facultySecretKeyController = TextEditingController();
   bool _isLoading = false;
 
   @override
@@ -260,6 +261,7 @@ class _RegisterFormState extends State<_RegisterForm> {
     _departmentController.dispose();
     _emailController.dispose();
     _passwordController.dispose();
+    _facultySecretKeyController.dispose();
     super.dispose();
   }
 
@@ -275,6 +277,7 @@ class _RegisterFormState extends State<_RegisterForm> {
       department: _departmentController.text.trim(),
       email: _emailController.text.trim(),
       password: _passwordController.text.trim(),
+      facultySecretKey: _facultySecretKeyController.text.trim(),
     );
 
     if (mounted) {
@@ -357,6 +360,18 @@ class _RegisterFormState extends State<_RegisterForm> {
             ),
             validator: (v) =>
                 v == null || v.length < 6 ? 'Password must be at least 6 characters' : null,
+          ),
+          const SizedBox(height: 12),
+          TextFormField(
+            controller: _facultySecretKeyController,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Faculty Authorization Key',
+              helperText: 'Required 2nd-layer verification key for Alexandria Univ. Faculty',
+              prefixIcon: Icon(Icons.verified_user_outlined),
+            ),
+            validator: (v) =>
+                v == null || v.trim().isEmpty ? 'Faculty Authorization Key is required' : null,
           ),
           const SizedBox(height: 20),
           SizedBox(
