@@ -126,15 +126,11 @@ class CertificatePinningConfig {
     // Example: 'sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA='
   ];
   
-  /// Production API URL — replace with your actual domain before release.
-  /// Also populate [allowedCertificates] with your server's SHA-256 fingerprints.
-  static const String productionUrl = 'https://gradeguardianv2-0.onrender.com';
+  /// Active Production API URL
+  static const String productionUrl = 'https://gradeguardian.vercel.app';
 
-  /// Development API URL — set to http://localhost:8000 for local development.
-  static const String developmentUrl = 'http://localhost:8000';
-  
-  /// Get the appropriate URL based on build mode
+  /// Active API URL
   static String get apiUrl {
-    return kReleaseMode ? productionUrl : developmentUrl;
+    return productionUrl;
   }
 }

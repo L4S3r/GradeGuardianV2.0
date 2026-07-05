@@ -40,32 +40,59 @@ class _GradesScreenState extends State<GradesScreen> {
     super.dispose();
   }
 
-@override
-Widget build(BuildContext context) {
-  return Scaffold(
-    appBar: AppBar(
-      title: _isSearching
-          ? TextField(
-              controller: _searchController,
-              autofocus: true,
-              decoration: const InputDecoration(
-                hintText: 'Search Course or Student ID...',
-                border: InputBorder.none,
-                hintStyle: TextStyle(color: Colors.white70),
-              ),
-              style: const TextStyle(color: Colors.white, fontSize: 18),
-            onChanged: (value) {
-              // Debounce search to avoid spamming the backend
-              if (_debounce?.isActive ?? false) _debounce!.cancel();
-              _debounce = Timer(const Duration(milliseconds: 500), () {
-                context.read<GradeProvider>().refresh(
-                  studentId: widget.studentId,
-                  search: value.trim().isEmpty ? null : value.trim(),
-                );
-              });
-            },
-            )
-          : const Text('Grade Records'),
+  @override
+  Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final hintColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF64748B);
+
+    return Scaffold(
+      appBar: AppBar(
+        title: _isSearching
+            ? Container(
+                height: 42,
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(
+                    color: isDark
+                        ? const Color(0xFF38BDF8).withOpacity(0.4)
+                        : const Color(0xFF0EA5E9).withOpacity(0.3),
+                  ),
+                ),
+                child: TextField(
+                  controller: _searchController,
+                  autofocus: true,
+                  style: TextStyle(
+                    color: textColor,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  decoration: InputDecoration(
+                    hintText: 'Search Course or Student ID...',
+                    border: InputBorder.none,
+                    isDense: true,
+                    contentPadding: const EdgeInsets.symmetric(vertical: 10),
+                    hintStyle: TextStyle(
+                      color: hintColor,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
+                    ),
+                  ),
+                  onChanged: (value) {
+                    // Debounce search to avoid spamming the backend
+                    if (_debounce?.isActive ?? false) _debounce!.cancel();
+                    _debounce = Timer(const Duration(milliseconds: 500), () {
+                      context.read<GradeProvider>().refresh(
+                            studentId: widget.studentId,
+                            search: value.trim().isEmpty ? null : value.trim(),
+                          );
+                    });
+                  },
+                ),
+              )
+            : const Text('Grade Records'),
       elevation: 0,
       actions: [
         IconButton(

@@ -5,6 +5,7 @@ import '../providers/grade_provider.dart';
 import '../providers/theme_provider.dart';
 import '../theme/app_theme.dart';
 import '../widgets/shimmer_loaders.dart';
+import '../widgets/security_shield_animation.dart';
 
 class ProfessorProfileScreen extends StatelessWidget {
   final String name;
@@ -165,11 +166,11 @@ class _IdentityCard extends StatelessWidget {
               children: [
                 Text(name, style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.w800)),
                 const SizedBox(height: 4),
-                _Row(Icons.badge_outlined, employeeId),
+                _row(Icons.badge_outlined, employeeId),
                 const SizedBox(height: 3),
-                _Row(Icons.apartment_rounded, department),
+                _row(Icons.apartment_rounded, department),
                 const SizedBox(height: 3),
-                _Row(Icons.email_outlined, email),
+                _row(Icons.email_outlined, email),
               ],
             ),
           ),
@@ -178,7 +179,7 @@ class _IdentityCard extends StatelessWidget {
     );
   }
 
-  Widget _Row(IconData icon, String text) => Row(
+  Widget _row(IconData icon, String text) => Row(
     children: [
       Icon(icon, color: Colors.white70, size: 13),
       const SizedBox(width: 4),
@@ -198,20 +199,15 @@ class _IntegrityBanner extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color:        isClean ? AppTheme.successLight  : AppTheme.dangerLight,
+        color: isClean ? AppTheme.successLight : AppTheme.dangerLight,
         borderRadius: AppTheme.radiusLg,
-        border:       Border.all(color: isClean ? AppTheme.successBorder : AppTheme.dangerBorder, width: 1.5),
+        border: Border.all(color: isClean ? AppTheme.successBorder : AppTheme.dangerBorder, width: 1.5),
       ),
       child: Row(
         children: [
-          Container(
-            padding: const EdgeInsets.all(10),
-            decoration: BoxDecoration(
-              color: (isClean ? AppTheme.success : AppTheme.danger).withOpacity(0.12),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(isClean ? Icons.verified_user : Icons.report_problem,
-                color: isClean ? AppTheme.success : AppTheme.danger, size: 24),
+          SecurityShieldAnimation(
+            isVerified: isClean,
+            size: 44,
           ),
           const SizedBox(width: 14),
           Expanded(
@@ -219,13 +215,13 @@ class _IntegrityBanner extends StatelessWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  isClean ? 'Integrity OK' : 'Integrity Alert',
-                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
+                  isClean ? 'Cryptographic Integrity OK' : 'Integrity Alert Flagged',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w800,
                       color: isClean ? AppTheme.success : AppTheme.danger),
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  isClean ? 'All $total records verified' : '$tampered of $total record(s) flagged',
+                  isClean ? 'All $total records HMAC verified' : '$tampered of $total record(s) flagged',
                   style: AppTheme.bodyMedium,
                 ),
               ],

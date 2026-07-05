@@ -68,13 +68,19 @@ if not SECRET_SALT:
     print("Using secret salt:", SECRET_SALT)
 
 # Get JWT secret from environment
-JWT_SECRET = os.getenv("JWT_SECRET", "default-fallback-jwt-secret-key-change-in-production")
-if not JWT_SECRET:
-    raise ValueError("JWT_SECRET environment variable is not set")
+JWT_SECRET_KEY  = os.getenv("JWT_SECRET_KEY", "gradeguardian_production_super_secret_jwt_key_2026_x99")
+HMAC_SECRET = os.getenv("HMAC_SECRET",     "gradeguardian_production_hmac_secret_salt_2026_v2").encode('utf-8')
+FACULTY_SECRET_KEY = os.getenv("FACULTY_SECRET_KEY", "DOCTOR-SECURE-2026")
+ALGORITHM   = "HS256"
+TOKEN_EXPIRE_HOURS = 24
 
-JWT_ALGORITHM = "HS256"
-JWT_EXPIRE_HOURS = 72   # professors stay logged in for 3 days
-
+def sanitize_sql_input(text: Optional[str]) -> Optional[str]:
+    """Sanitizes input parameters against SQL injection patterns and unsafe control tokens."""
+    if not text:
+        return text
+    # Strip dangerous SQL quotes, semicolons, and comment operators
+    cleaned = re.sub(r"['\";\\--]", "", text)
+    return cleaned.strip()
 
 # Use this identical function in BOTH backends
 def build_grade_data_string(grade_id, student_id, course_code, grade, letter_grade, recorded_at):
@@ -873,7 +879,7 @@ async def create_course(
 
 @app.get("/")
 async def root():
-    return {"message": "GradeGuardian API v2 is Online", "status": "Secure"}
+    return {"message": "GradeGuardian API is online", "status": "Secure"}
 
 @app.post("/admin/rehash-grades")
 async def rehash_grades(

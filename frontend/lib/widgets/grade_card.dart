@@ -4,6 +4,7 @@ import '../providers/grade_provider.dart';
 import '../models/grade_record.dart';
 import '../widgets/integrity_badge.dart';
 import '../widgets/audit_log_sheet.dart';
+import '../widgets/security_scanner_sheet.dart';
 import '../theme/app_theme.dart';
 
 class GradeCard extends StatelessWidget {
@@ -30,6 +31,15 @@ class GradeCard extends StatelessWidget {
     }
   }
 
+  void _inspectSecurity(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => SecurityScannerSheet(grade: grade),
+    );
+  }
+
   Color get _color => AppTheme.gradeColor(grade.grade);
   Color get _colorLight => AppTheme.gradeColorLight(grade.grade);
 
@@ -53,7 +63,7 @@ class GradeCard extends StatelessWidget {
         child: Material(
           color: Colors.transparent,
           child: InkWell(
-            onTap: onTap,
+            onTap: onTap ?? () => _inspectSecurity(context),
             borderRadius: AppTheme.radiusLg,
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -99,16 +109,19 @@ class GradeCard extends StatelessWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(grade.courseCode, style: AppTheme.labelSmall),
-                        const SizedBox(height: 2),
-                        Text('Student ID: ${grade.studentId}', style: AppTheme.labelSmall),
+                            const SizedBox(height: 2),
+                            Text('Student ID: ${grade.studentId}', style: AppTheme.labelSmall),
                           ],
                         ),
                       ),
                       const SizedBox(width: 8),
-                      IntegrityBadge(
-                        isVerified: grade.isVerified,
-                        errorMessage: grade.verificationError,
-                        onRetry: onRetryVerification,
+                      GestureDetector(
+                        onTap: () => _inspectSecurity(context),
+                        child: IntegrityBadge(
+                          isVerified: grade.isVerified,
+                          errorMessage: grade.verificationError,
+                          onRetry: onRetryVerification,
+                        ),
                       ),
                     ],
                   ),
@@ -155,23 +168,21 @@ class GradeCard extends StatelessWidget {
                   const Divider(height: 1, color: AppTheme.cardBorder),
                   const SizedBox(height: 10),
 
-                  // Row 3: Date + lock + audit log button
+                  // Row 3: Date & Security Inspector + Audit Log Action
                   Row(
                     children: [
-                      Icon(Icons.calendar_today_outlined,
-                          size: 13, color: AppTheme.textHint),
-                      const SizedBox(width: 4),
-                      Text(_formatDate(grade.recordedAt),
-                          style: AppTheme.labelSmall),
-                      const SizedBox(width: 10),
-                      Icon(
-                        grade.isVerified
-                            ? Icons.lock_outline
-                            : Icons.lock_open_outlined,
-                        size: 13,
-                        color: grade.isVerified
-                            ? AppTheme.success
-                            : AppTheme.danger,
+                      GestureDetector(
+                        onTap: () => _inspectSecurity(context),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.shield_outlined, size: 14, color: Color(0xFF0EA5E9)),
+                            const SizedBox(width: 4),
+                            Text(
+                              _formatDate(grade.recordedAt),
+                              style: AppTheme.labelSmall,
+                            ),
+                          ],
+                        ),
                       ),
                       const Spacer(),
                       GestureDetector(
@@ -192,29 +203,29 @@ class GradeCard extends StatelessWidget {
                     ],
                   ),
 
-                  // Tamper warning
+                  // Clean 1-line Tamper Alert Banner (No heavy button)
                   if (isTampered) ...[
                     const SizedBox(height: 10),
                     Container(
                       padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 8),
+                          horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
                         color: AppTheme.dangerBorder.withOpacity(0.4),
                         borderRadius: AppTheme.radiusSm,
                       ),
                       child: Row(
-                        children: [
-                          const Icon(Icons.warning_amber_rounded,
-                              size: 15, color: AppTheme.danger),
-                          const SizedBox(width: 6),
-                          const Expanded(
+                        children: const [
+                          Icon(Icons.warning_amber_rounded,
+                              size: 14, color: AppTheme.danger),
+                          SizedBox(width: 6),
+                          Expanded(
                             child: Text(
-                              'Record compromised — do not trust this value',
+                              'Record compromised — tap card to inspect & repair',
                               style: TextStyle(
                                 fontSize: 11,
                                 fontWeight: FontWeight.w600,
                                 color: AppTheme.danger,
-                                letterSpacing: 0.5,
+                                letterSpacing: 0.3,
                               ),
                             ),
                           ),

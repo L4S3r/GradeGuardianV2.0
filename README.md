@@ -141,7 +141,7 @@ Open Swagger Documentation: `http://localhost:8000/docs`
 ### 3. Frontend App Setup (Professor / TA App)
 
 ```bash
-cd GradeGuardianV2.0/frontend/v2
+cd GradeGuardianV2.0/frontend
 
 # Install Flutter packages
 flutter pub get

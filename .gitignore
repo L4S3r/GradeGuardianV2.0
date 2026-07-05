@@ -24,16 +24,16 @@ backend/grades.db
 # ---------------------------------------------------------------------------
 # Flutter Frontend
 # ---------------------------------------------------------------------------
-frontend/v2/.dart_tool/
-frontend/v2/.flutter-plugins
-frontend/v2/.flutter-plugins-dependencies
-frontend/v2/.packages
-frontend/v2/build/
-frontend/v2/pubspec.lock
-frontend/v2/*.iml
+frontend/.dart_tool/
+frontend/.flutter-plugins
+frontend/.flutter-plugins-dependencies
+frontend/.packages
+frontend/build/
+frontend/pubspec.lock
+frontend/*.iml
 
 # Platform-specific build artifacts
-frontend/v2/ios/Pods/
-frontend/v2/ios/Podfile.lock
-frontend/v2/android/.gradle/
-frontend/v2/android/local.properties
+frontend/ios/Pods/
+frontend/ios/Podfile.lock
+frontend/android/.gradle/
+frontend/android/local.properties
