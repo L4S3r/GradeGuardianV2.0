@@ -14,6 +14,9 @@ backend/env/
 
 # Sensitive files
 backend/secret_salt.txt
+backend/faculty_key.txt
+backend/*key.txt
+backend/generate_faculty_key.py
 backend/.env
 
 # Local databases
