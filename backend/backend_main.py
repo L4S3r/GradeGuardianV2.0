@@ -986,6 +986,57 @@ async def get_my_grade_logs(
     return {"logs": [AuditLogResponse.model_validate(l).model_dump() for l in logs]}
 
 
+@app.post("/student/verify/batch")
+@limiter.limit("10/minute")
+async def student_verify_batch(
+    request: Request,
+    data: BatchVerifyRequest,
+    db: Session = Depends(get_db),
+    payload: dict = Depends(require_student),
+):
+    """Student-scoped batch verification.
+    Each grade ID is verified only if it belongs to the authenticated student.
+    Returns is_valid=False for any grade not owned by this student.
+    """
+    student_id = payload.get("sub")
+    results = []
+
+    for g_id in data.grade_ids:
+        # Scope strictly to the calling student's grades only
+        grade = db.query(GradeDB).filter(
+            GradeDB.id == g_id,
+            GradeDB.student_id == student_id,
+        ).first()
+        if not grade:
+            results.append({"grade_id": g_id, "is_valid": False, "error": "Not found"})
+            continue
+
+        data_string  = build_grade_data_string(
+            grade.id, grade.student_id, grade.course_code,
+            grade.grade, grade.letter_grade, grade.recorded_at.isoformat()
+        )
+        current_hash = compute_hash(data_string)
+        is_valid     = (current_hash == grade.hash)
+
+        # H-3: Only log FAIL events
+        if not is_valid:
+            db.add(AuditLogDB(
+                grade_id      = grade.id,
+                action        = "Student Batch Verification",
+                status        = "FAIL",
+                error_details = "Integrity mismatch detected on student verify",
+            ))
+
+        results.append({
+            "grade_id": grade.id,
+            "is_valid": is_valid,
+            "error":    None if is_valid else "Integrity check failed",
+        })
+
+    db.commit()
+    return {"results": results, "status": "success"}
+
+
 @app.get("/audit-logs", response_model=List[AuditLogResponse])
 async def get_audit_logs(
     db: Session = Depends(get_db),
