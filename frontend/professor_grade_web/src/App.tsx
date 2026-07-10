@@ -49,7 +49,7 @@ function App() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
   const [professor, setProfessor] = useState<Professor | null>(null);
   const [token, setToken] = useState<string | null>(null);
-  const [serverUrl, setServerUrl] = useState<string>(() => {
+  const [serverUrl] = useState<string>(() => {
     return localStorage.getItem('gg_server_url') || import.meta.env.VITE_API_URL || 'http://localhost:8000';
   });
   const [prevServerUrl, setPrevServerUrl] = useState<string>(() => {
@@ -70,7 +70,7 @@ function App() {
 
   // Login / Register Form states
   const [formMode, setFormMode] = useState<'login' | 'register'>('login');
-  const [showServerUrlInput, setShowServerUrlInput] = useState<boolean>(false);
+
   const [loginEmail, setLoginEmail] = useState<string>('');
   const [loginPassword, setLoginPassword] = useState<string>('');
   const [regName, setRegName] = useState<string>('');
@@ -978,31 +978,6 @@ function App() {
               </button>
             </form>
           )}
-
-          {/* Advanced Server Configuration */}
-          <div className="server-config-toggle">
-            <button 
-              className="server-toggle-btn"
-              onClick={() => setShowServerUrlInput(!showServerUrlInput)}
-            >
-              <Key size={14} />
-              {showServerUrlInput ? 'Hide Server Configuration' : 'Show Server Configuration'}
-            </button>
-            
-            {showServerUrlInput && (
-              <div className="form-group" style={{ animation: 'fade-in 0.2s ease' }}>
-                <label htmlFor="serverUrl">API Gateway URL</label>
-                <input
-                  id="serverUrl"
-                  type="text"
-                  className="form-control"
-                  style={{ paddingLeft: '14px' }}
-                  value={serverUrl}
-                  onChange={e => setServerUrl(e.target.value)}
-                />
-              </div>
-            )}
-          </div>
         </div>
       </div>
     );

@@ -264,13 +264,6 @@ In the Vercel Dashboard for the frontend project (**Project Settings → Environ
 ### 🚀 Deploying Updates
 Every time you push changes to GitHub, Vercel will automatically detect changes in each directory and trigger hot-builds for both the backend and frontend projects.
 
-```bash
-# Push to main to trigger auto-deployment
-git add .
-git commit -m "feat: implement security audit logs and update brand assets"
-git push origin main
-```
-
 ---
 
 ## 🗄️ Database Management
