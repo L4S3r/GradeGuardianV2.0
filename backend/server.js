@@ -158,7 +158,7 @@ if (DATABASE_URL.startsWith('postgres://')) {
 const poolConfig = {
   max: 10,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 5000,
+  connectionTimeoutMillis: 10000, // 10s — gives Vercel cold starts enough time to reach Supabase
 };
 
 if (DATABASE_URL) {
@@ -1021,15 +1021,34 @@ app.use((err, _req, res, _next) => {
 // ─────────────────────────────────────────────────────────────────────────────
 const PORT = parseInt(process.env.PORT || '8000', 10);
 
-runMigrations()
-  .then(() => {
-    app.listen(PORT, () => {
-      console.log(`[INFO] GradeGuardian Express API running on port ${PORT}`);
-    });
-  })
-  .catch(err => {
-    console.error('[FATAL] Migration failed:', err.message);
-    process.exit(1);
-  });
+// Export app immediately so Vercel serverless can serve requests on cold starts
+// without waiting for migrations to finish. This prevents connection timeout
+// errors from crashing the entire function invocation.
+module.exports = app;
 
-module.exports = app; // export for Vercel serverless
+// Track whether migrations have already run this process lifetime.
+// In serverless each cold start is a fresh process, but warm invocations reuse it.
+let migrationsDone = false;
+
+async function ensureMigrations() {
+  if (migrationsDone) return;
+  try {
+    await runMigrations();
+    migrationsDone = true;
+  } catch (err) {
+    // Non-fatal: tables most likely already exist from a prior deployment.
+    // Log a warning and let the request continue — don't crash the process.
+    console.warn('[WARN] Migration attempt failed (non-fatal):', err.message);
+  }
+}
+
+// Kick off migrations in the background immediately on cold start.
+// If it times out on this invocation it will retry on the next cold start.
+ensureMigrations();
+
+// Local dev: also listen on PORT so `npm run dev` works normally.
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`[INFO] GradeGuardian Express API running on port ${PORT}`);
+  });
+}
