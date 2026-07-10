@@ -1,16 +1,16 @@
 # 🛡️ GradeGuardian V2.0 — Cryptographic Grade Integrity Platform
 
-> **Official Grade Management & Cryptographic Verification System**  
-> **Adopted for Academic Integrity at Alexandria University** 🎓  
+> **Official Grade Management & Cryptographic Verification System**
+> **Adopted for Academic Integrity at Alexandria University** 🎓
 > *"Trust, but verify."*
 
 ---
 
 ## 📌 Executive Summary
 
-**GradeGuardian V2.0** is an enterprise-grade academic grade management platform designed for professors, teaching assistants, and academic administrators. Built around the core principle of **tamper-proof academic integrity**, GradeGuardian uses **HMAC-SHA256 cryptographic hashing** with a secret salt to guarantee that student grade records cannot be altered, spoofed, or manipulated — even by database administrators or unauthorized system intruders.
+**GradeGuardian V2.0** is an enterprise-grade academic grade management platform designed for professors, teaching assistants, and academic administrators. Built around the core principle of **tamper-proof academic integrity**, GradeGuardian uses **HMAC-SHA256 cryptographic hashing** to guarantee that student grade records cannot be altered, spoofed, or manipulated — even by database administrators or unauthorized system intruders.
 
-This repository contains the **Master Backend API (FastAPI)** and the **Professor/TA Management Portal (Flutter)**.
+This repository contains the **Master Backend API (Express/Node.js)** and the **Professor/TA Management Portal (Flutter)**.
 
 ### 🔗 Related Repositories & Ecosystem
 
@@ -21,28 +21,43 @@ This repository contains the **Master Backend API (FastAPI)** and the **Professo
 
 ## 🏛️ Alexandria University Integration
 
-GradeGuardian V2.0 has been structured to meet the high-security standards of **Alexandria University** (Faculty of Engineering & Computer Science). 
+GradeGuardian V2.0 has been structured to meet the high-security standards of **Alexandria University** (Faculty of Engineering & Computer Science).
 
-### Key Objectives for Alexandria University:
-1. **Zero-Tampering Guarantee**: Every grade entered by a professor or TA is immediately hashed with an immutable cryptographic signature.
-2. **Audit & Accountability**: Automatic audit logging tracks every grade creation, update, repair, and verification event.
-3. **Seamless Student Access**: Integrates directly with the [Alexandria University Student Portal](https://github.com/L4S3r/grade-guardian) so students can inspect their grades and verify authenticity in real-time.
-4. **Resilient Cloud Architecture**: Backend deployed on **Vercel** with connection pooling to **Supabase PostgreSQL**.
+### Key Objectives
+1. **Zero-Tampering Guarantee**: Every grade entered by a professor or TA is immediately signed with an immutable HMAC-SHA256 cryptographic hash.
+2. **Audit & Accountability**: Automatic audit logging tracks every grade creation, update, repair, and verification event — failures logged only (H-3 policy to prevent log flooding).
+3. **Seamless Student Access**: Integrates directly with the [Alexandria University Student Portal](https://github.com/L4S3r/grade-guardian) so students can verify their grade authenticity in real-time.
+4. **Resilient Cloud Architecture**: Backend deployed on **Vercel** (Node.js serverless) with connection pooling to **Supabase PostgreSQL**.
 
 ---
 
 ## 🔒 Cryptographic Security Architecture
 
-GradeGuardian uses **HMAC-SHA256** hashing to guarantee data integrity:
+GradeGuardian uses **HMAC-SHA256** to guarantee grade data integrity. The hash is built from a canonical normalized string:
 
 ```text
-Normalized String = "grade_id|student_id|course_code|grade|letter_grade|ISO_timestamp"
-HMAC_Hash         = HMAC_SHA256(SECRET_SALT, Normalized String)
+Normalized String = "grade_id|student_id|course_code|grade.0|letter_grade|YYYY-MM-DDTHH:MM:SS"
+HMAC_Hash         = HMAC_SHA256(HMAC_SECRET, Normalized String)
 ```
 
-1. **Grade Submission**: When a professor submits or updates a grade, the system constructs a canonical normalized data string and computes `HMAC_SHA256(SECRET_SALT, Normalized String)`.
-2. **Tampering Detection**: Whenever a grade is retrieved or audited, the system recomputes the HMAC signature. If a single digit or timestamp was changed directly in the database, the hash mismatch is flagged immediately as **FAIL (Tampered)**.
-3. **Audit Log & Repair**: Provides automated audit logs (`audit_logs`) and an administrative endpoint (`/repair/{grade_id}`) to restore grades from secure backup values.
+| Step | What Happens |
+|---|---|
+| **Grade Submission** | System constructs the normalized string and stores `HMAC_SHA256(HMAC_SECRET, string)` alongside the grade. |
+| **Tampering Detection** | On every read, the hash is recomputed. A single changed digit or timestamp triggers `is_verified: false`. |
+| **Audit Logging** | Only `FAIL` events write to `audit_logs` (prevents DoS via log flooding). |
+| **Repair** | `/repair/:gradeId` restores the grade from `original_grade` / `original_letter_grade` secure backups and recomputes the hash. |
+
+### Defense-in-Depth Keys
+
+Two separate HMAC keys are maintained for defense-in-depth:
+
+| Key | Purpose |
+|---|---|
+| `HMAC_SECRET` | Dedicated key for grade integrity signatures (`computeHash`) |
+| `SECRET_SALT` | Supplementary entropy key (legacy PBKDF2 fallback path) |
+| `JWT_SECRET` | JWT token signing |
+| `FACULTY_SECRET_KEY` | Second-factor gate for professor account registration |
+| `ADMIN_KEY` | Second-factor gate for the admin rehash endpoint |
 
 ---
 
@@ -55,11 +70,11 @@ HMAC_Hash         = HMAC_SHA256(SECRET_SALT, Normalized String)
 └────────────────┬────────────────┘       └────────────────┬────────────────┘
                  │                                         │
                  └──────────────────┬──────────────────────┘
-                                    │ HTTP / REST API
+                                    │ HTTPS / REST API
                                     ▼
                       ┌───────────────────────────┐
-                      │   Unified FastAPI Backend │
-                      │     (Vercel Serverless)   │
+                      │  Express/Node.js Backend  │
+                      │    (Vercel Serverless)    │
                       └─────────────┬─────────────┘
                                     │
                                     ▼
@@ -69,135 +84,249 @@ HMAC_Hash         = HMAC_SHA256(SECRET_SALT, Normalized String)
                       └───────────────────────────┘
 ```
 
-* **Backend Engine**: FastAPI (Python 3.10+), SQLAlchemy 2.0, Pydantic v2, PyJWT, SlowAPI rate limiting.
-* **Database**: Supabase PostgreSQL (Production) / SQLite (`grades.db` for local development).
-* **Frontend App**: Flutter 3.x (Provider Pattern, HTTP SSL Security, FL Chart, Shimmer UI).
-* **Deployment**: Vercel Serverless Functions (`@vercel/python`).
+### Backend Stack
+
+| Layer | Technology |
+|---|---|
+| **Runtime** | Node.js 18+ |
+| **Framework** | Express 4.x |
+| **Database Driver** | `pg` (node-postgres) |
+| **Authentication** | `jsonwebtoken` (JWT HS256) |
+| **Password Hashing** | `bcrypt` (configurable rounds via `BCRYPT_ROUNDS`) |
+| **Rate Limiting** | `express-rate-limit` |
+| **Security Headers** | `helmet` |
+| **CORS** | `cors` |
+| **Deployment** | Vercel Serverless (`@vercel/node`) |
+
+### Frontend Stack
+
+| Layer | Technology |
+|---|---|
+| **Framework** | Flutter 3.x |
+| **State Management** | Provider Pattern |
+| **Charts** | FL Chart |
+| **UI** | Shimmer, custom glassmorphism components |
 
 ---
 
 ## ✨ Features
 
 ### For Professors & Teaching Assistants
-* 🔐 **Secure Auth**: JWT-based login and PBKDF2 / Bcrypt password security.
-* 📚 **Course Management**: Create and organize courses by course code and department.
-* 📝 **Grade Posting**: Submit single grades or upload batch grade records for a class.
-* 📊 **Analytics Dashboard**: View class grade distributions (A, B, C, D, F) and GPA averages.
-* 🛠️ **Integrity Repair**: One-click repair tool to restore tampered records to verified originals.
+* 🔐 **Secure Auth** — JWT-based login, bcrypt password hashing, faculty key gate on registration.
+* 📚 **Course Management** — Create and organize courses by code and department.
+* 📝 **Grade Posting** — Submit single grades or upload batch records (up to 100 per request).
+* 📊 **Analytics Dashboard** — Grade distributions (A–F) and per-course averages.
+* 🛠️ **Integrity Repair** — One-click restore of tampered records from cryptographic backups.
+* 📋 **Audit Logs** — View full tamper history per grade.
 
 ### For Students (via Student Portal)
-* 🎓 **Student Registration & Login**: Access personalized grade books using student ID numbers.
-* ✅ **Live Verification Badges**: Instant cryptographic verification (`VERIFIED` vs `TAMPERED`).
-* 📜 **Grade Audit Logs**: View chronological history of grade verification checks.
-* 📦 **Batch Verification**: Run server-side verification across multiple courses at once.
+* 🎓 **Registration & Login** — Personalized grade book via student ID.
+* ✅ **Live Verification Badges** — Instant `VERIFIED` vs `TAMPERED` status on every grade.
+* 📜 **Grade Audit Trail** — Chronological history of all integrity checks.
+* 📦 **Batch Verification** — Server-side verification across all courses at once.
 
 ---
 
-## 🚀 Environment & Setup Guide
+## 🚀 Local Development Setup
 
-### 1. Prerequisites
-* **Python**: `3.10` or higher
-* **Flutter**: `3.19` or higher
-* **Database**: Supabase PostgreSQL account (or local SQLite)
+### Prerequisites
 
-### 2. Backend Local Setup
+| Tool | Version |
+|---|---|
+| Node.js | `>= 18.0.0` |
+| npm | `>= 9.0.0` |
+| Flutter | `>= 3.19` |
+| Supabase Account | — |
+
+### 1. Clone the Repository
 
 ```bash
-# Clone repository
 git clone https://github.com/L4S3r/GradeGuardianV2.0.git
-cd GradeGuardianV2.0/backend
+cd GradeGuardianV2.0
+```
 
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # On Windows: .venv\Scripts\activate
+### 2. Backend Setup
 
-# Install dependencies
-pip install -r requirements.txt
+```bash
+cd backend
 
-# Configure Environment Variables
+# Install Node.js dependencies
+npm install
+
+# Set up environment variables
 cp .env.example .env
 ```
 
-Edit your `backend/.env` file (refer to `.env.example`):
-```env
-SECRET_SALT=your_generated_secret_salt_here
-JWT_SECRET=your_generated_jwt_secret_here
+Edit `backend/.env` — **every key is required** (see [Environment Variables](#-environment-variables) below).
 
-SUPABASE_URL=https://your-project-ref.supabase.co
-SUPABASE_KEY=your_supabase_key_here
-
-# PostgreSQL (Supabase Pooler) or leave commented for local SQLite:
-DATABASE_URL=postgresql://postgres.your-ref:[YOUR-PASSWORD]@aws-0-[your-region].pooler.supabase.com:6543/postgres?sslmode=require
-```
-
-Run the backend server:
-```bash
-uvicorn backend_main:app --reload --port 8000
-```
-Open Swagger Documentation: `http://localhost:8000/docs`
-
----
-
-### 3. Frontend App Setup (Professor / TA App)
+Start the development server with hot-reload:
 
 ```bash
-cd GradeGuardianV2.0/frontend
+npm run dev
+```
+
+Or start without hot-reload:
+
+```bash
+npm start
+```
+
+API is now live at `http://localhost:8000`.
+
+### 3. Frontend Setup (Professor / TA App)
+
+```bash
+cd frontend
 
 # Install Flutter packages
 flutter pub get
 
-# Run application
+# Run on your target platform
 flutter run
 ```
 
 ---
 
-## 🌐 Deployment to Vercel & Supabase
+## 🔑 Environment Variables
 
-### 1. Supabase Database Configuration
-1. Go to **Supabase Dashboard** $\rightarrow$ **Project Settings** $\rightarrow$ **Database**.
-2. Copy your **Transaction Pooler Connection String** (Port `6543`).
+All environment variables live in `backend/.env`. Copy `backend/.env.example` as a starting point.
 
-### 2. Vercel Environment Variables
-Add the following keys in your Vercel Project Settings (refer to `backend/.env.example`):
-- `DATABASE_URL`: `postgresql://postgres.[ref]:[password]@aws-0-[region].pooler.supabase.com:6543/postgres?sslmode=require`
-- `SECRET_SALT`: *(Your generated 64-char hex salt)*
-- `JWT_SECRET`: *(Your generated 64-char hex JWT secret)*
-- `SUPABASE_URL`: `https://your-project-ref.supabase.co`
-- `SUPABASE_KEY`: *(Your Supabase publishable/service key)*
-- `ENVIRONMENT`: `production`
-- `ALLOWED_ORIGINS`: `*`
+### Required — will crash at startup if missing
 
-Deploy using Vercel CLI or GitHub push:
-```bash
-vercel --prod
-```
+| Variable | Description | How to Generate |
+|---|---|---|
+| `SECRET_SALT` | Supplementary HMAC entropy key. **Never change after grades are created.** | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `HMAC_SECRET` | Dedicated key for grade integrity hashes. **Never change after grades are created.** | Same as above |
+| `JWT_SECRET` | JWT signing secret. Changing this invalidates all active sessions. | Same as above |
+| `FACULTY_SECRET_KEY` | Gate key for professor registration. Share only with authorized staff. | `node -e "console.log('GG-FACULTY-' + require('crypto').randomBytes(24).toString('base64url'))"` |
+| `ADMIN_KEY` | Gate key for `/admin/rehash-grades`. | `node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"` |
+| `DATABASE_URL` | Supabase PostgreSQL connection string (port `6543` pooler). | Supabase Dashboard → Project Settings → Database → URI |
+
+### Optional — have safe defaults
+
+| Variable | Default | Description |
+|---|---|---|
+| `ENVIRONMENT` | `development` | Set to `production` on Vercel. Enforces all required secrets. |
+| `ALLOWED_ORIGINS` | localhost origins | Comma-separated list of allowed CORS origins. |
+| `JWT_EXPIRE_HOURS` | `24` | How long JWTs stay valid (hours). |
+| `BCRYPT_ROUNDS` | `12` | bcrypt cost factor. Increase on faster hardware. |
+| `PORT` | `8000` | Local dev port. Ignored by Vercel. |
+
+> ⚠️ **Critical**: `SECRET_SALT` and `HMAC_SECRET` must **never change** after grade data exists. Changing either key will invalidate all existing HMAC hashes and trigger false tamper alerts on every grade.
 
 ---
 
-## 📖 API Endpoint Specification
+## 🌐 Vercel Deployment
 
-| Method | Endpoint | Authorization | Description |
-| :--- | :--- | :--- | :--- |
-| `POST` | `/auth/register` | Public | Register new professor account |
-| `POST` | `/auth/login` | Public | Authenticate professor and receive JWT |
-| `POST` | `/student/register` | Public | Register student account |
-| `POST` | `/student/login` | Public | Authenticate student and receive JWT |
-| `GET` | `/student/grades` | Student JWT | Retrieve logged-in student's grades with HMAC check |
-| `GET` | `/student/grades/{id}/logs` | Student JWT | Audit log trail for specific grade |
-| `GET` | `/courses` | Professor JWT | List professor's courses |
-| `POST` | `/courses` | Professor JWT | Create new course |
-| `GET` | `/grades` | Professor JWT | List all grades for professor's courses |
-| `POST` | `/grades` | Professor JWT | Create student grade record |
-| `POST` | `/grades/batch` | Professor JWT | Batch submit grades for a class |
-| `PUT` | `/grades/{id}` | Professor JWT | Update grade record |
-| `POST` | `/repair/{id}` | Professor JWT | Restore tampered grade record to original |
-| `POST` | `/verify/batch` | Public / Auth | Run batch cryptographic verification |
-| `GET` | `/statistics/summary` | Professor JWT | GPA and grade distribution statistics |
+### 1. Set Environment Variables on Vercel
+
+In **Vercel → Project Settings → Environment Variables**, add all [Required variables](#required--will-crash-at-startup-if-missing) plus:
+
+```
+ENVIRONMENT=production
+ALLOWED_ORIGINS=https://your-frontend-domain.vercel.app
+```
+
+> Do **not** add `SUPABASE_URL` or `SUPABASE_KEY` — the Node.js backend connects to Supabase directly via `DATABASE_URL` and does not use the Supabase JS SDK.
+
+### 2. Deploy
+
+```bash
+# Via Vercel CLI
+vercel --prod
+
+# Or simply push to main — Vercel auto-deploys from GitHub
+git push origin main
+```
+
+The `vercel.json` at the repo root routes all traffic to `backend/server.js` via `@vercel/node`.
+
+---
+
+## 🗄️ Database Management
+
+The backend auto-runs schema migrations on every startup (`runMigrations()`). No manual SQL is needed for a fresh deployment.
+
+### Reset / Purge Database
+
+A utility script is included for wiping all tables (FK-safe order):
+
+```bash
+cd backend
+node scripts/purge_db.js
+```
+
+This truncates `audit_logs → grades → courses → students → professors` and prints a row-count confirmation.
+
+> ⚠️ This is **irreversible**. All data will be permanently deleted.
+
+---
+
+## 📖 API Endpoint Reference
+
+### Auth (Public)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/auth/register` | Register professor account (requires `faculty_secret_key`) |
+| `POST` | `/auth/login` | Authenticate professor, receive JWT |
+| `POST` | `/student/register` | Register student account |
+| `POST` | `/student/login` | Authenticate student, receive JWT |
+
+### Professor Endpoints (Professor JWT Required)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/professors/me` | Get authenticated professor profile |
+| `GET` | `/courses` | List professor's courses |
+| `POST` | `/courses` | Create a new course |
+| `GET` | `/grades` | List grades (supports `?search=`, `?student_id=`, `?course_code=`) |
+| `POST` | `/grades` | Submit a single grade record |
+| `POST` | `/grades/batch` | Batch submit up to 100 grade records |
+| `PUT` | `/grades/:id` | Update a grade (recomputes HMAC) |
+| `POST` | `/repair/:id` | Restore tampered grade from secure backup |
+| `GET` | `/grades/:id/logs` | Audit log for a specific grade |
+| `POST` | `/verify/batch` | Batch HMAC verification (up to 100 IDs) |
+| `GET` | `/audit-logs` | All audit events for professor's grades |
+| `GET` | `/statistics/summary` | Grade distribution & average statistics |
+
+### Admin Endpoints (Professor JWT + `X-Admin-Key` Header)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `POST` | `/admin/rehash-grades` | Recompute HMAC hashes for all professor's grades |
+
+### Student Endpoints (Student JWT Required)
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/student/me` | Get authenticated student profile |
+| `GET` | `/student/grades` | View own grades with live HMAC verification |
+| `GET` | `/student/grades/:id/logs` | Audit log for a specific grade |
+| `POST` | `/student/verify/batch` | Batch HMAC verification for own grades |
+
+### Utility
+
+| Method | Endpoint | Description |
+|---|---|---|
+| `GET` | `/` | API health check |
+| `GET` | `/health` | JSON health status with timestamp |
+
+---
+
+## 🔐 Rate Limits
+
+| Endpoint Group | Limit |
+|---|---|
+| Global (all routes) | 100 req / min / IP |
+| Auth (`/auth/*`, `/student/register`, `/student/login`) | 5 req / min / IP |
+| Grade creation (`POST /grades`) | 30 req / min / IP |
+| Batch operations | 20 req / min / IP |
+| Admin endpoints | 5 req / min / IP |
 
 ---
 
 ## 📄 License & Academic Attribution
 
-Designed and developed for **Alexandria University**.  
+Designed and developed for **Alexandria University**.
 *All rights reserved for academic integrity and official portal integration.*

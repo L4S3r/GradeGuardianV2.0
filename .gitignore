@@ -4,25 +4,26 @@
 .vscode/
 
 # ---------------------------------------------------------------------------
-# Python Backend
+# Node.js Backend
 # ---------------------------------------------------------------------------
-backend/__pycache__/
-backend/*.pyc
-backend/venv/
-backend/.venv/
-backend/env/
+backend/node_modules/
+backend/npm-debug.log*
+backend/yarn-debug.log*
+backend/yarn-error.log*
+backend/.pnpm-debug.log*
+backend/dist/
+backend/build/
 
 # Sensitive files
 backend/secret_salt.txt
 backend/faculty_key.txt
 backend/*key.txt
-backend/generate_faculty_key.py
 backend/.env
 
-# Local databases
+# Local databases (kept in case SQLite is used in dev)
 backend/*.db
 backend/*.db-journal
-backend/grades.db
+backend/scripts/purge_db.js
 
 # ---------------------------------------------------------------------------
 # Flutter Frontend
@@ -40,3 +41,4 @@ frontend/ios/Pods/
 frontend/ios/Podfile.lock
 frontend/android/.gradle/
 frontend/android/local.properties
+
