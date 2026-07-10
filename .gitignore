@@ -28,17 +28,23 @@ backend/scripts/purge_db.js
 # ---------------------------------------------------------------------------
 # Flutter Frontend
 # ---------------------------------------------------------------------------
-frontend/.dart_tool/
-frontend/.flutter-plugins
-frontend/.flutter-plugins-dependencies
-frontend/.packages
-frontend/build/
-frontend/pubspec.lock
-frontend/*.iml
+frontend/professor_grade_app/.dart_tool/
+frontend/professor_grade_app/.flutter-plugins
+frontend/professor_grade_app/.flutter-plugins-dependencies
+frontend/professor_grade_app/.packages
+frontend/professor_grade_app/build/
+frontend/professor_grade_app/pubspec.lock
+frontend/professor_grade_app/*.iml
 
 # Platform-specific build artifacts
-frontend/ios/Pods/
-frontend/ios/Podfile.lock
-frontend/android/.gradle/
-frontend/android/local.properties
+frontend/professor_grade_app/ios/Pods/
+frontend/professor_grade_app/ios/Podfile.lock
+frontend/professor_grade_app/android/.gradle/
+frontend/professor_grade_app/android/local.properties
 
+stitch_mobile_to_web_parity (1).zip
+stitch_mobile_to_web_parity.zip
+.gitignore
+stitch_mobile_to_web_parity/screen.png
+stitch_mobile_to_web_parity/code.html
+Ingest.md

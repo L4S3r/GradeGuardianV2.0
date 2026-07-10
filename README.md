@@ -216,30 +216,60 @@ All environment variables live in `backend/.env`. Copy `backend/.env.example` as
 
 ---
 
-## 🌐 Vercel Deployment
+## 🌐 Vercel Monorepo Deployment
 
-### 1. Set Environment Variables on Vercel
+Since both the **Express Backend API** and the **Professor Web Portal** reside in the same repository, they are deployed as **two separate projects** in your Vercel dashboard.
 
-In **Vercel → Project Settings → Environment Variables**, add all [Required variables](#required--will-crash-at-startup-if-missing) plus:
+---
 
-```
-ENVIRONMENT=production
-ALLOWED_ORIGINS=https://your-frontend-domain.vercel.app
-```
+### 🖥️ Project 1: Express Backend API
 
-> Do **not** add `SUPABASE_URL` or `SUPABASE_KEY` — the Node.js backend connects to Supabase directly via `DATABASE_URL` and does not use the Supabase JS SDK.
+This project hosts the API server that connects to Supabase and manages database encryption.
 
-### 2. Deploy
+#### 1. Configuration Settings
+* **Framework Preset**: Other (Detected automatically via `vercel.json` in the repository root)
+* **Root Directory**: `.` (Repository root)
+* **Build Command**: Leave default / empty
+* **Output Directory**: Leave default / empty
+
+#### 2. Set Environment Variables
+In the Vercel Dashboard for the backend project (**Project Settings → Environment Variables**), add:
+* `ENVIRONMENT`: `production`
+* `DATABASE_URL`: *Your Supabase PostgreSQL Connection String*
+* `HMAC_SECRET`: *Your Cryptographic HMAC Secret*
+* `SECRET_SALT`: *Your Salt Value*
+* `JWT_SECRET`: *Your JWT Secret Key*
+* `FACULTY_SECRET_KEY`: *Your Faculty Gate Key*
+* `ADMIN_KEY`: *Your Admin Rehash Gate Key*
+* `ALLOWED_ORIGINS`: `https://your-professor-web-portal.vercel.app` *(The URL of Project 2)*
+
+---
+
+### 💻 Project 2: Professor Web Portal (React / Vite)
+
+This project builds and hosts the static React administration dashboard.
+
+#### 1. Configuration Settings
+* **Framework Preset**: `Vite`
+* **Root Directory**: `frontend/professor_grade_web`
+* **Build Command**: `npm run build` (runs `tsc -b && vite build`)
+* **Output Directory**: `dist`
+
+#### 2. Set Environment Variables
+In the Vercel Dashboard for the frontend project (**Project Settings → Environment Variables**), add:
+* `VITE_API_URL`: `https://your-backend-api.vercel.app` *(The URL of Project 1)*
+
+---
+
+### 🚀 Deploying Updates
+Every time you push changes to GitHub, Vercel will automatically detect changes in each directory and trigger hot-builds for both the backend and frontend projects.
 
 ```bash
-# Via Vercel CLI
-vercel --prod
-
-# Or simply push to main — Vercel auto-deploys from GitHub
+# Push to main to trigger auto-deployment
+git add .
+git commit -m "feat: implement security audit logs and update brand assets"
 git push origin main
 ```
-
-The `vercel.json` at the repo root routes all traffic to `backend/server.js` via `@vercel/node`.
 
 ---
 

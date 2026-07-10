@@ -94,13 +94,24 @@ function sanitizeSqlInput(value) {
 }
 
 function buildGradeDataString(gradeId, studentId, courseCode, grade, letterGrade, recordedAt) {
-  // Normalize timestamp to exactly YYYY-MM-DDTHH:MM:SS (no timezone, no micros)
-  let tsStr;
+  // Normalize timestamp to exactly YYYY-MM-DDTHH:MM:SS (no timezone, no micros) in UTC
+  let dateObj;
   if (recordedAt instanceof Date) {
-    tsStr = recordedAt.toISOString().replace('Z', '').split('.')[0];
+    dateObj = recordedAt;
   } else {
-    tsStr = String(recordedAt).replace('+00:00', '').replace('Z', '').split('.')[0].substring(0, 19);
+    let rawStr = String(recordedAt).trim();
+    if (!rawStr.includes('T') && rawStr.includes(' ')) {
+      rawStr = rawStr.replace(' ', 'T');
+    }
+    // If it has timezone offset like +03 or +00, new Date() parses it correctly.
+    // If it has no timezone, we assume UTC (add 'Z') to match DB/Vercel behavior
+    if (!rawStr.endsWith('Z') && !rawStr.includes('+') && !/-\d{2}:\d{2}$/.test(rawStr) && !/-\d{2}$/.test(rawStr)) {
+      rawStr += 'Z';
+    }
+    dateObj = new Date(rawStr);
   }
+
+  const tsStr = dateObj.toISOString().replace('Z', '').split('.')[0];
   const gradeVal = parseFloat(grade).toFixed(1);
   return `${gradeId}|${studentId}|${courseCode}|${gradeVal}|${letterGrade}|${tsStr}`;
 }
@@ -533,6 +544,13 @@ app.get('/grades', ...professorMiddleware, async (req, res, next) => {
     }
 
     for (const [gid, action, status, details] of failLogs) {
+      const { rows: lastLog } = await query(
+        'SELECT * FROM audit_logs WHERE grade_id = $1 ORDER BY checked_at DESC, id DESC LIMIT 1',
+        [gid]
+      );
+      if (lastLog.length > 0 && lastLog[0].status === 'FAIL' && lastLog[0].action === action) {
+        continue;
+      }
       await query(
         'INSERT INTO audit_logs (grade_id, action, status, error_details) VALUES ($1,$2,$3,$4)',
         [gid, action, status, details]
@@ -698,10 +716,16 @@ app.post('/verify/batch', verifyLimiter, ...professorMiddleware, async (req, res
       const isValid    = computeHash(dataString) === g.hash;
 
       if (!isValid) {
-        await query(
-          `INSERT INTO audit_logs (grade_id, action, status, error_details) VALUES ($1,$2,$3,$4)`,
-          [g.id, 'Batch Verification', 'FAIL', 'Integrity mismatch detected']
+        const { rows: lastLog } = await query(
+          'SELECT * FROM audit_logs WHERE grade_id = $1 ORDER BY checked_at DESC, id DESC LIMIT 1',
+          [g.id]
         );
+        if (!(lastLog.length > 0 && lastLog[0].status === 'FAIL' && lastLog[0].action === 'Batch Verification')) {
+          await query(
+            `INSERT INTO audit_logs (grade_id, action, status, error_details) VALUES ($1,$2,$3,$4)`,
+            [g.id, 'Batch Verification', 'FAIL', 'Integrity mismatch detected']
+          );
+        }
       }
       results.push({ grade_id: g.id, is_valid: isValid, error: isValid ? null : 'Integrity check failed' });
     }
@@ -781,10 +805,16 @@ app.get('/student/grades', requireStudent, async (req, res, next) => {
       const isVerified = computeHash(dataStr) === g.hash;
 
       if (!isVerified) {
-        await query(
-          `INSERT INTO audit_logs (grade_id, action, status, error_details) VALUES ($1,$2,$3,$4)`,
-          [g.id, 'Student View', 'FAIL', 'Hash mismatch detected on student view']
+        const { rows: lastLog } = await query(
+          'SELECT * FROM audit_logs WHERE grade_id = $1 ORDER BY checked_at DESC, id DESC LIMIT 1',
+          [g.id]
         );
+        if (!(lastLog.length > 0 && lastLog[0].status === 'FAIL' && lastLog[0].action === 'Student View')) {
+          await query(
+            `INSERT INTO audit_logs (grade_id, action, status, error_details) VALUES ($1,$2,$3,$4)`,
+            [g.id, 'Student View', 'FAIL', 'Hash mismatch detected on student view']
+          );
+        }
       }
       results.push(formatGradeResponse(g, isVerified));
     }
@@ -826,10 +856,16 @@ app.post('/student/verify/batch', makeLimiter(10), requireStudent, async (req, r
       const isValid    = computeHash(dataString) === g.hash;
 
       if (!isValid) {
-        await query(
-          `INSERT INTO audit_logs (grade_id, action, status, error_details) VALUES ($1,$2,$3,$4)`,
-          [g.id, 'Student Batch Verification', 'FAIL', 'Integrity mismatch detected on student verify']
+        const { rows: lastLog } = await query(
+          'SELECT * FROM audit_logs WHERE grade_id = $1 ORDER BY checked_at DESC, id DESC LIMIT 1',
+          [g.id]
         );
+        if (!(lastLog.length > 0 && lastLog[0].status === 'FAIL' && lastLog[0].action === 'Student Batch Verification')) {
+          await query(
+            `INSERT INTO audit_logs (grade_id, action, status, error_details) VALUES ($1,$2,$3,$4)`,
+            [g.id, 'Student Batch Verification', 'FAIL', 'Integrity mismatch detected on student verify']
+          );
+        }
       }
       results.push({ grade_id: g.id, is_valid: isValid, error: isValid ? null : 'Integrity check failed' });
     }
