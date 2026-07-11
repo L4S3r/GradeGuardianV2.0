@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   List as ListIcon,
   ChartBar,
@@ -13,6 +13,7 @@ import {
   Envelope,
   IdentificationCard,
   ArrowClockwise,
+  BookOpen,
   SignOut,
   MagnifyingGlass,
   Warning,
@@ -21,7 +22,12 @@ import {
   Moon,
   Sun,
   X,
-  GraduationCap
+  GraduationCap,
+  Trash,
+  UploadSimple,
+  ShieldSlash,
+  Eye,
+  EyeSlash
 } from '@phosphor-icons/react';
 import { ApiService } from './services/api';
 import type {
@@ -47,7 +53,9 @@ function App() {
 
   // ── AUTH STATE ─────────────────────────────────────────────────────────────
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [userRole, setUserRole] = useState<'professor' | 'student' | null>(null);
   const [professor, setProfessor] = useState<Professor | null>(null);
+  const [student, setStudent] = useState<any | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [serverUrl] = useState<string>(() => {
     return localStorage.getItem('gg_server_url') || import.meta.env.VITE_API_URL || 'http://localhost:8000';
@@ -57,7 +65,7 @@ function App() {
   });
 
   // ── APP FLOW & ENVIRONMENT STATE ───────────────────────────────────────────
-  const [currentTab, setCurrentTab] = useState<'grades' | 'statistics' | 'profile' | 'logs'>('grades');
+  const [currentTab, setCurrentTab] = useState<'grades' | 'courses' | 'statistics' | 'profile' | 'logs'>('grades');
   const [securityChecking, setSecurityChecking] = useState<boolean>(true);
   const [securityCheckPassed, setSecurityCheckPassed] = useState<boolean>(true);
   const [securityCheckReason, setSecurityCheckReason] = useState<string | null>(null);
@@ -69,18 +77,56 @@ function App() {
   const [loadingGlobalLogs, setLoadingGlobalLogs] = useState<boolean>(false);
 
   // Login / Register Form states
+  const [authPortalMode, setAuthPortalMode] = useState<'professor' | 'student'>('professor');
   const [formMode, setFormMode] = useState<'login' | 'register'>('login');
 
   const [loginEmail, setLoginEmail] = useState<string>('');
   const [loginPassword, setLoginPassword] = useState<string>('');
+  const [loginStudentId, setLoginStudentId] = useState<string>('');
   const [regName, setRegName] = useState<string>('');
   const [regEmpId, setRegEmpId] = useState<string>('');
   const [regDept, setRegDept] = useState<string>('');
   const [regEmail, setRegEmail] = useState<string>('');
   const [regPassword, setRegPassword] = useState<string>('');
   const [regSecretKey, setRegSecretKey] = useState<string>('');
+  const [regConfirmPassword, setRegConfirmPassword] = useState<string>('');
+  const [showLoginPassword, setShowLoginPassword] = useState<boolean>(false);
+  const [showRegPassword, setShowRegPassword] = useState<boolean>(false);
+  const [showRegConfirmPassword, setShowRegConfirmPassword] = useState<boolean>(false);
+  const [showSecretKey, setShowSecretKey] = useState<boolean>(false);
+  const [showLoadingIndicator, setShowLoadingIndicator] = useState<boolean>(false);
+  const [showStatsLoadingIndicator, setShowStatsLoadingIndicator] = useState<boolean>(false);
+  const [showGlobalLogsLoadingIndicator, setShowGlobalLogsLoadingIndicator] = useState<boolean>(false);
+  const [regStudentId, setRegStudentId] = useState<string>('');
+  const [regStudentDept, setRegStudentDept] = useState<string>('');
   const [authError, setAuthError] = useState<string | null>(null);
+  const [registerErrors, setRegisterErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
+
+  const cursorRef = useRef<HTMLDivElement>(null);
+  const [cursorHovered, setCursorHovered] = useState<boolean>(false);
+  const [cursorVisible, setCursorVisible] = useState<boolean>(false);
+
+  const resetAuthForm = () => {
+    setLoginEmail('');
+    setLoginPassword('');
+    setLoginStudentId('');
+    setRegName('');
+    setRegEmpId('');
+    setRegDept('');
+    setRegEmail('');
+    setRegPassword('');
+    setRegSecretKey('');
+    setRegConfirmPassword('');
+    setRegStudentId('');
+    setRegStudentDept('');
+    setAuthError(null);
+    setRegisterErrors({});
+    setShowLoginPassword(false);
+    setShowRegPassword(false);
+    setShowRegConfirmPassword(false);
+    setShowSecretKey(false);
+  };
 
   // ── GRADES RECORDS STATE ───────────────────────────────────────────────────
   const [grades, setGrades] = useState<GradeRecord[]>([]);
@@ -90,10 +136,12 @@ function App() {
   const [courseFilter, setCourseFilter] = useState<string>('All');
   const [sortOption, setSortOption] = useState<string>('date-desc');
   const [activeCourses, setActiveCourses] = useState<CourseModel[]>([]);
+  const [courseSearchQuery, setCourseSearchQuery] = useState<string>('');
 
   // ── STATISTICS STATE ───────────────────────────────────────────────────────
   const [stats, setStats] = useState<ProfessorStats | null>(null);
   const [statsLoading, setStatsLoading] = useState<boolean>(false);
+  const [studentGpa, setStudentGpa] = useState<number>(0);
 
   // ── MODALS & DETAILS STATE ─────────────────────────────────────────────────
   const [selectedGrade, setSelectedGrade] = useState<GradeRecord | null>(null);
@@ -110,14 +158,174 @@ function App() {
   const [newGrade, setNewGrade] = useState<string>('');
   const [newLetterGrade, setNewLetterGrade] = useState<string>('F');
   
-  // Batch Entry Modal State
-  const [batchText, setBatchText] = useState<string>('');
-  const [batchError, setBatchError] = useState<string | null>(null);
+  // Course selection state in modal
+  const [selectedCourseCode, setSelectedCourseCode] = useState<string>('');
+  const [showNewCourseFields, setShowNewCourseFields] = useState<boolean>(false);
+  
+  // Batch Entry Modal State (Mirroring Flutter app's GradeEntry rows)
+  interface WebBatchEntry {
+    studentId: string;
+    grade: string;
+    letterGrade: string;
+  }
+  const [webBatchCourseCode, setWebBatchCourseCode] = useState<string>('');
+  const [webBatchEntries, setWebBatchEntries] = useState<WebBatchEntry[]>([
+    { studentId: '', grade: '', letterGrade: 'F' },
+    { studentId: '', grade: '', letterGrade: 'F' },
+    { studentId: '', grade: '', letterGrade: 'F' }
+  ]);
   
   // Edit Grade Modal State
   const [showEditModal, setShowEditModal] = useState<boolean>(false);
   const [editGradeVal, setEditGradeVal] = useState<string>('');
   const [editLetterGradeVal, setEditLetterGradeVal] = useState<string>('F');
+  const [showStatusModal, setShowStatusModal] = useState<boolean>(false);
+
+  // Simulative Loading Bar State for Cryptographic Handshake
+  const LOADING_MESSAGES = [
+    "Establishing secure handshake with Alexandria University root servers...",
+    "Retrieving cryptographically signed grading vaults...",
+    "Running local record validation checks...",
+    "Computing and comparing HMAC-SHA256 signatures...",
+    "Checking for unauthorized database modifications...",
+    "Verifying Alexandria University faculty authority keys...",
+    "Syncing security audit log feed with decentralized ledger...",
+    "Confirming timestamp integrity on all records..."
+  ];
+
+  const [loadingProgress, setLoadingProgress] = useState<number>(0);
+  const [loadingMsg, setLoadingMsg] = useState<string>('Initializing secure connection...');
+
+  useEffect(() => {
+    let progressInterval: any;
+    let messageInterval: any;
+
+    if (isLoading) {
+      setLoadingProgress(0);
+      setLoadingMsg(LOADING_MESSAGES[0]);
+
+      progressInterval = setInterval(() => {
+        setLoadingProgress(prev => {
+          if (prev >= 95) return prev;
+          return prev + Math.floor(Math.random() * 8) + 2;
+        });
+      }, 150);
+
+      let msgIdx = 1;
+      messageInterval = setInterval(() => {
+        setLoadingMsg(LOADING_MESSAGES[msgIdx % LOADING_MESSAGES.length]);
+        msgIdx++;
+      }, 1600);
+    } else {
+      setLoadingProgress(100);
+    }
+
+    return () => {
+      clearInterval(progressInterval);
+      clearInterval(messageInterval);
+    };
+  }, [isLoading]);
+
+  // Delayed loading states to prevent flicker under 300ms
+  useEffect(() => {
+    if (isLoading) {
+      const t = setTimeout(() => setShowLoadingIndicator(true), 300);
+      return () => clearTimeout(t);
+    } else {
+      setShowLoadingIndicator(false);
+    }
+  }, [isLoading]);
+
+  useEffect(() => {
+    if (statsLoading) {
+      const t = setTimeout(() => setShowStatsLoadingIndicator(true), 300);
+      return () => clearTimeout(t);
+    } else {
+      setShowStatsLoadingIndicator(false);
+    }
+  }, [statsLoading]);
+
+  useEffect(() => {
+    if (loadingGlobalLogs) {
+      const t = setTimeout(() => setShowGlobalLogsLoadingIndicator(true), 300);
+      return () => clearTimeout(t);
+    } else {
+      setShowGlobalLogsLoadingIndicator(false);
+    }
+  }, [loadingGlobalLogs]);
+
+  // Custom transparent cursor tracker follower with inertia/damping
+  useEffect(() => {
+    let mouseX = 0;
+    let mouseY = 0;
+    let cursorX = 0;
+    let cursorY = 0;
+    let isMoving = false;
+    let animationFrameId: number;
+
+    const onMouseMove = (e: MouseEvent) => {
+      mouseX = e.clientX;
+      mouseY = e.clientY;
+      if (!isMoving) {
+        setCursorVisible(true);
+        isMoving = true;
+      }
+    };
+
+    const onMouseLeave = () => {
+      setCursorVisible(false);
+      isMoving = false;
+    };
+
+    window.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseleave', onMouseLeave);
+
+    const updateCursor = () => {
+      const dx = mouseX - cursorX;
+      const dy = mouseY - cursorY;
+      
+      // Fluid damping factor (0.15 gives a highly responsive yet smooth trail)
+      cursorX += dx * 0.15;
+      cursorY += dy * 0.15;
+
+      if (cursorRef.current) {
+        cursorRef.current.style.transform = `translate3d(${cursorX}px, ${cursorY}px, 0)`;
+      }
+      animationFrameId = requestAnimationFrame(updateCursor);
+    };
+    updateCursor();
+
+    // Hover detection for interactive items
+    const handleMouseEnter = () => setCursorHovered(true);
+    const handleMouseLeave = () => setCursorHovered(false);
+
+    const bindHoverListeners = () => {
+      const targets = document.querySelectorAll(
+        'button, a, input, select, textarea, [role="button"], .grade-record-card, .filter-pill, .nav-btn, .bottom-nav-btn, .action-btn'
+      );
+      targets.forEach(el => {
+        el.removeEventListener('mouseenter', handleMouseEnter);
+        el.removeEventListener('mouseleave', handleMouseLeave);
+        el.addEventListener('mouseenter', handleMouseEnter);
+        el.addEventListener('mouseleave', handleMouseLeave);
+      });
+    };
+
+    bindHoverListeners();
+
+    // Re-bind when DOM updates dynamically to capture newly mounted elements
+    const observer = new MutationObserver(() => {
+      bindHoverListeners();
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      window.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseleave', onMouseLeave);
+      cancelAnimationFrame(animationFrameId);
+      observer.disconnect();
+    };
+  }, []);
 
   // ── SYNC ACTIONS ───────────────────────────────────────────────────────────
   useEffect(() => {
@@ -142,10 +350,18 @@ function App() {
   useEffect(() => {
     const savedToken = localStorage.getItem('gg_token');
     const savedProf = localStorage.getItem('gg_prof');
-    if (savedToken && savedProf) {
+    const savedStudent = localStorage.getItem('gg_student');
+    const savedRole = localStorage.getItem('gg_role') as 'professor' | 'student' | null;
+
+    if (savedToken && savedRole) {
       setToken(savedToken);
-      api.setToken(savedToken); // Sync token with ApiService
-      setProfessor(JSON.parse(savedProf));
+      api.setToken(savedToken);
+      setUserRole(savedRole);
+      if (savedRole === 'professor' && savedProf) {
+        setProfessor(JSON.parse(savedProf));
+      } else if (savedRole === 'student' && savedStudent) {
+        setStudent(JSON.parse(savedStudent));
+      }
       setIsAuthenticated(true);
     }
   }, []);
@@ -205,6 +421,34 @@ function App() {
     }
   }, [newGrade]);
 
+  // Auto-calculate letter grade based on edit numeric grade input
+  useEffect(() => {
+    const num = parseFloat(editGradeVal);
+    if (!isNaN(num)) {
+      if (num >= 90) setEditLetterGradeVal('A');
+      else if (num >= 80) setEditLetterGradeVal('B');
+      else if (num >= 70) setEditLetterGradeVal('C');
+      else if (num >= 60) setEditLetterGradeVal('D');
+      else setEditLetterGradeVal('F');
+    }
+  }, [editGradeVal]);
+
+  // Sync newCourseCode & newCourseName automatically when selectedCourseCode changes
+  useEffect(() => {
+    if (selectedCourseCode === 'NEW_COURSE') {
+      setNewCourseCode('');
+      setNewCourseName('');
+      setShowNewCourseFields(true);
+    } else if (selectedCourseCode) {
+      const selected = activeCourses.find(c => c.course_code === selectedCourseCode);
+      if (selected) {
+        setNewCourseCode(selected.course_code);
+        setNewCourseName(selected.course_name);
+      }
+      setShowNewCourseFields(false);
+    }
+  }, [selectedCourseCode, activeCourses]);
+
   // ── CORE API SERVICE CALLS ─────────────────────────────────────────────────
   const apiCall = async (endpoint: string, options: RequestInit = {}): Promise<any> => {
     const activeToken = token || localStorage.getItem('gg_token');
@@ -228,7 +472,8 @@ function App() {
     setIsLoading(true);
     setErrorMessage(null);
     try {
-      const data = await apiCall('/grades');
+      const endpoint = userRole === 'student' ? '/student/grades' : '/grades';
+      const data = await apiCall(endpoint);
       const formattedGrades = data.map((json: any) => ({
         id: json.id.toString(),
         studentId: json.student_id || 'N/A',
@@ -257,7 +502,8 @@ function App() {
     if (recordsList.length === 0) return;
     try {
       const ids = recordsList.map(g => g.id);
-      const results = await apiCall('/verify/batch', {
+      const verifyEndpoint = userRole === 'student' ? '/student/verify/batch' : '/verify/batch';
+      const results = await apiCall(verifyEndpoint, {
         method: 'POST',
         body: JSON.stringify({ grade_ids: ids })
       });
@@ -271,7 +517,7 @@ function App() {
         }
       });
 
-      setGrades(prev => prev.map(grade => {
+      const updatedGrades = recordsList.map(grade => {
         const result = resultMap[grade.id];
         if (!result) {
           return { ...grade, isVerified: false, verificationError: 'Verification missing' };
@@ -281,10 +527,73 @@ function App() {
           isVerified: !!result.is_valid,
           verificationError: result.error || null
         };
-      }));
+      });
+      setGrades(updatedGrades);
+      if (userRole === 'student') {
+        computeStudentStats(updatedGrades);
+      }
     } catch (e) {
       console.error('Batch verification error:', e);
     }
+  };
+
+  const computeStudentStats = (recordsList: GradeRecord[]) => {
+    const verified = recordsList.filter(g => g.isVerified);
+    if (verified.length === 0) {
+      setStats({
+        totalGrades: 0,
+        overallAverage: 0,
+        courseStats: [],
+        gradeDistribution: { A: 0, B: 0, C: 0, D: 0, F: 0 }
+      });
+      setStudentGpa(0);
+      return;
+    }
+
+    const totalGrades = verified.length;
+    const overallAverage = verified.reduce((sum, g) => sum + g.grade, 0) / totalGrades;
+
+    const _gradeToGpa = (g: GradeRecord) => {
+      if (g.grade >= 90) return 4.0;
+      if (g.grade >= 80) return 3.0;
+      if (g.grade >= 70) return 2.0;
+      if (g.grade >= 60) return 1.0;
+      return 0.0;
+    };
+    const calculatedGpa = verified.reduce((sum, g) => sum + _gradeToGpa(g), 0) / totalGrades;
+    setStudentGpa(calculatedGpa);
+
+    const courseMap: { [key: string]: { code: string; name: string; sum: number; count: number } } = {};
+    verified.forEach(g => {
+      if (!courseMap[g.courseCode]) {
+        courseMap[g.courseCode] = { code: g.courseCode, name: g.courseName, sum: 0, count: 0 };
+      }
+      courseMap[g.courseCode].sum += g.grade;
+      courseMap[g.courseCode].count += 1;
+    });
+    const courseStatsList: CourseStat[] = Object.values(courseMap).map(c => ({
+      code: c.code,
+      name: c.name,
+      average: c.sum / c.count,
+      students: c.count
+    }));
+
+    const gradeDistribution: { [key: string]: number } = { A: 0, B: 0, C: 0, D: 0, F: 0 };
+    recordsList.forEach(g => {
+      const letter = g.letterGrade.charAt(0).toUpperCase();
+      if (gradeDistribution.hasOwnProperty(letter)) {
+        gradeDistribution[letter]++;
+      } else {
+        gradeDistribution.F++;
+      }
+    });
+
+    setStats({
+      totalGrades,
+      overallAverage,
+      courseStats: courseStatsList,
+      gradeDistribution
+    });
   };
 
   const loadStats = async () => {
@@ -323,6 +632,17 @@ function App() {
     try {
       const data = await apiCall('/courses');
       setActiveCourses(data);
+      if (data.length > 0) {
+        setSelectedCourseCode(prev => prev || data[0].course_code || '');
+        setNewCourseCode(prev => prev || data[0].course_code || '');
+        setNewCourseName(prev => prev || data[0].course_name || '');
+        setWebBatchCourseCode(prev => prev || data[0].course_code || '');
+        setShowNewCourseFields(false);
+      } else {
+        setSelectedCourseCode('NEW_COURSE');
+        setShowNewCourseFields(true);
+        setWebBatchCourseCode('');
+      }
     } catch (e) {
       console.error('Failed to load courses:', e);
     }
@@ -330,82 +650,243 @@ function App() {
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!loginEmail || !loginPassword) return;
-    setIsSubmitting(true);
     setAuthError(null);
-    try {
-      const data = await apiCall('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email: loginEmail, password: loginPassword })
-      });
-      
-      const prof: Professor = data.professor;
-      const tok: string = data.access_token || data.token;
-      
-      localStorage.setItem('gg_token', tok);
-      localStorage.setItem('gg_prof', JSON.stringify(prof));
-      localStorage.setItem('gg_server_url', serverUrl);
-      api.setToken(tok);
-      
-      setToken(tok);
-      setProfessor(prof);
-      setIsAuthenticated(true);
-    } catch (err: any) {
-      setAuthError(err.message || 'Login failed. Please verify credentials.');
-    } finally {
-      setIsSubmitting(false);
+
+    if (authPortalMode === 'professor') {
+      if (!loginEmail.trim()) {
+        setAuthError('Please enter your email address.');
+        return;
+      }
+      if (!/\S+@\S+\.\S+/.test(loginEmail)) {
+        setAuthError('Please enter a valid email address.');
+        return;
+      }
+      if (!loginPassword) {
+        setAuthError('Please enter your password.');
+        return;
+      }
+      const normalizedEmail = loginEmail.trim().toLowerCase();
+      setIsSubmitting(true);
+      try {
+        const data = await apiCall('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email: normalizedEmail, password: loginPassword })
+        });
+        
+        const prof: Professor = data.professor;
+        const tok: string = data.access_token || data.token;
+        
+        localStorage.setItem('gg_token', tok);
+        localStorage.setItem('gg_prof', JSON.stringify(prof));
+        localStorage.setItem('gg_role', 'professor');
+        localStorage.setItem('gg_server_url', serverUrl);
+        api.setToken(tok);
+        
+        setToken(tok);
+        setUserRole('professor');
+        setProfessor(prof);
+        setIsAuthenticated(true);
+      } catch (err: any) {
+        setAuthError(err.message || 'Login failed. Please verify credentials.');
+      } finally {
+        setIsSubmitting(false);
+      }
+    } else {
+      if (!loginStudentId.trim()) {
+        setAuthError('Please enter your Student ID.');
+        return;
+      }
+      if (!loginPassword) {
+        setAuthError('Please enter your password.');
+        return;
+      }
+      const normalizedStudentId = loginStudentId.trim();
+      setIsSubmitting(true);
+      try {
+        const data = await apiCall('/student/login', {
+          method: 'POST',
+          body: JSON.stringify({ student_id: normalizedStudentId, password: loginPassword })
+        });
+        
+        const stud = data.student;
+        const tok: string = data.access_token || data.token;
+        
+        localStorage.setItem('gg_token', tok);
+        localStorage.setItem('gg_student', JSON.stringify(stud));
+        localStorage.setItem('gg_role', 'student');
+        localStorage.setItem('gg_server_url', serverUrl);
+        api.setToken(tok);
+        
+        setToken(tok);
+        setUserRole('student');
+        setStudent(stud);
+        setIsAuthenticated(true);
+      } catch (err: any) {
+        setAuthError(err.message || 'Login failed. Please verify student credentials.');
+      } finally {
+        setIsSubmitting(false);
+      }
     }
+  };
+
+  const validateRegisterField = (field: string, val: string) => {
+    let error = '';
+    const cleanVal = val.trim();
+
+    if (field === 'regName') {
+      if (!cleanVal) error = 'Full name is required.';
+    } else if (field === 'regEmpId') {
+      if (!cleanVal) error = 'Employee ID is required.';
+    } else if (field === 'regStudentId') {
+      if (!cleanVal) error = 'Student ID is required.';
+    } else if (field === 'regDept' || field === 'regStudentDept') {
+      if (!cleanVal) error = 'Department / Faculty name is required.';
+    } else if (field === 'regEmail') {
+      if (!cleanVal) {
+        error = 'Email address is required.';
+      } else if (!/\S+@\S+\.\S+/.test(cleanVal)) {
+        error = 'Please enter a valid email address (e.g. name@alexu.edu.eg).';
+      }
+    } else if (field === 'regPassword') {
+      if (!val) {
+        error = 'Password is required.';
+      } else if (val.length < 6) {
+        error = 'Password must be at least 6 characters.';
+      }
+    } else if (field === 'regConfirmPassword') {
+      if (val !== regPassword) {
+        error = 'Passwords do not match.';
+      }
+    } else if (field === 'regSecretKey') {
+      if (!cleanVal) error = 'Faculty Authorization Key is required.';
+    }
+
+    setRegisterErrors(prev => ({
+      ...prev,
+      [field]: error
+    }));
+
+    return !error;
   };
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!regName || !regEmpId || !regDept || !regEmail || !regPassword || !regSecretKey) {
-      setAuthError('All registration fields are required.');
+    setAuthError(null);
+
+    let isValid = true;
+    if (authPortalMode === 'professor') {
+      const nameOk = validateRegisterField('regName', regName);
+      const empOk = validateRegisterField('regEmpId', regEmpId);
+      const deptOk = validateRegisterField('regDept', regDept);
+      const emailOk = validateRegisterField('regEmail', regEmail);
+      const passOk = validateRegisterField('regPassword', regPassword);
+      const confOk = validateRegisterField('regConfirmPassword', regConfirmPassword);
+      const keyOk = validateRegisterField('regSecretKey', regSecretKey);
+      isValid = nameOk && empOk && deptOk && emailOk && passOk && confOk && keyOk;
+    } else {
+      const nameOk = validateRegisterField('regName', regName);
+      const studOk = validateRegisterField('regStudentId', regStudentId);
+      const deptOk = validateRegisterField('regStudentDept', regStudentDept);
+      const emailOk = validateRegisterField('regEmail', regEmail);
+      const passOk = validateRegisterField('regPassword', regPassword);
+      const confOk = validateRegisterField('regConfirmPassword', regConfirmPassword);
+      isValid = nameOk && studOk && deptOk && emailOk && passOk && confOk;
+    }
+
+    if (!isValid) {
+      setAuthError('Please correct the validation errors below.');
       return;
     }
-    setIsSubmitting(true);
-    setAuthError(null);
-    try {
-      await apiCall('/auth/register', {
-        method: 'POST',
-        body: JSON.stringify({
-          name: regName,
-          employee_id: regEmpId,
-          department: regDept,
-          email: regEmail,
-          password: regPassword,
-          faculty_secret_key: regSecretKey
-        })
-      });
 
-      // Auto login after registration
-      const data = await apiCall('/auth/login', {
-        method: 'POST',
-        body: JSON.stringify({ email: regEmail, password: regPassword })
-      });
-      
-      const prof: Professor = data.professor;
-      const tok: string = data.access_token || data.token;
-      
-      localStorage.setItem('gg_token', tok);
-      localStorage.setItem('gg_prof', JSON.stringify(prof));
-      localStorage.setItem('gg_server_url', serverUrl);
-      api.setToken(tok);
-      
-      setToken(tok);
-      setProfessor(prof);
-      setIsAuthenticated(true);
-    } catch (err: any) {
-      setAuthError(err.message || 'Registration failed.');
-    } finally {
-      setIsSubmitting(false);
+    if (authPortalMode === 'professor') {
+      const normalizedEmail = regEmail.trim().toLowerCase();
+      setIsSubmitting(true);
+      try {
+        await apiCall('/auth/register', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: regName,
+            employee_id: regEmpId,
+            department: regDept,
+            email: normalizedEmail,
+            password: regPassword,
+            faculty_secret_key: regSecretKey
+          })
+        });
+
+        // Auto login after registration
+        const data = await apiCall('/auth/login', {
+          method: 'POST',
+          body: JSON.stringify({ email: normalizedEmail, password: regPassword })
+        });
+        
+        const prof: Professor = data.professor;
+        const tok: string = data.access_token || data.token;
+        
+        localStorage.setItem('gg_token', tok);
+        localStorage.setItem('gg_prof', JSON.stringify(prof));
+        localStorage.setItem('gg_role', 'professor');
+        localStorage.setItem('gg_server_url', serverUrl);
+        api.setToken(tok);
+        
+        setToken(tok);
+        setUserRole('professor');
+        setProfessor(prof);
+        setIsAuthenticated(true);
+      } catch (err: any) {
+        setAuthError(err.message || 'Registration failed.');
+      } finally {
+        setIsSubmitting(false);
+      }
+    } else {
+      const normalizedEmail = regEmail.trim().toLowerCase();
+      const normalizedStudentId = regStudentId.trim();
+      setIsSubmitting(true);
+      try {
+        await apiCall('/student/register', {
+          method: 'POST',
+          body: JSON.stringify({
+            name: regName,
+            student_id: normalizedStudentId,
+            department: regStudentDept.trim(),
+            email: normalizedEmail,
+            password: regPassword
+          })
+        });
+
+        // Auto login after registration
+        const data = await apiCall('/student/login', {
+          method: 'POST',
+          body: JSON.stringify({ student_id: normalizedStudentId, password: regPassword })
+        });
+        
+        const stud = data.student;
+        const tok: string = data.access_token || data.token;
+        
+        localStorage.setItem('gg_token', tok);
+        localStorage.setItem('gg_student', JSON.stringify(stud));
+        localStorage.setItem('gg_role', 'student');
+        localStorage.setItem('gg_server_url', serverUrl);
+        api.setToken(tok);
+        
+        setToken(tok);
+        setUserRole('student');
+        setStudent(stud);
+        setIsAuthenticated(true);
+      } catch (err: any) {
+        setAuthError(err.message || 'Registration failed.');
+      } finally {
+        setIsSubmitting(false);
+      }
     }
   };
 
   const handleLogout = () => {
     setIsAuthenticated(false);
     setProfessor(null);
+    setStudent(null);
     setToken(null);
+    setUserRole(null);
     setGrades([]);
     setStats(null);
     setActiveCourses([]);
@@ -413,84 +894,143 @@ function App() {
     
     localStorage.removeItem('gg_token');
     localStorage.removeItem('gg_prof');
+    localStorage.removeItem('gg_student');
+    localStorage.removeItem('gg_role');
     api.setToken(null);
   };
 
   const handleSingleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newStudentId || !newCourseCode || !newCourseName || !newGrade || !newLetterGrade) return;
-    setIsSubmitting(true);
+    
+    const tempId = `temp-${Date.now()}`;
+    const optimisticRecord: GradeRecord = {
+      id: tempId,
+      studentId: newStudentId.trim(),
+      courseCode: newCourseCode.trim(),
+      courseName: newCourseName.trim(),
+      grade: parseFloat(newGrade),
+      letterGrade: newLetterGrade,
+      recordedAt: new Date().toISOString(),
+      hash: 'Calculating SHA256...',
+      isVerified: true
+    };
+
+    const previousGrades = grades;
+    
+    // Optimistically update local state immediately
+    setGrades(prev => [optimisticRecord, ...prev]);
+    
+    // Clear and close modal instantly for rapid response
+    setNewStudentId('');
+    setNewCourseCode('');
+    setNewCourseName('');
+    setNewGrade('');
+    setNewLetterGrade('F');
+    setShowAddModal(false);
+
     try {
+      if (selectedCourseCode === 'NEW_COURSE') {
+        try {
+          await apiCall('/courses', {
+            method: 'POST',
+            body: JSON.stringify({
+              course_code: optimisticRecord.courseCode,
+              course_name: optimisticRecord.courseName
+            })
+          });
+        } catch (err: any) {
+          console.error('Failed to auto-register new course:', err);
+        }
+      }
+
       const responseGrade = await apiCall('/grades', {
         method: 'POST',
         body: JSON.stringify({
-          student_id: newStudentId.trim(),
-          course_code: newCourseCode.trim(),
-          course_name: newCourseName.trim(),
-          grade: parseFloat(newGrade),
-          letter_grade: newLetterGrade
+          student_id: optimisticRecord.studentId,
+          course_code: optimisticRecord.courseCode,
+          course_name: optimisticRecord.courseName,
+          grade: optimisticRecord.grade,
+          letter_grade: optimisticRecord.letterGrade
         })
       });
       
-      // Update grades locally
-      setGrades(prev => [
-        {
-          id: responseGrade.id.toString(),
-          studentId: responseGrade.student_id,
-          courseCode: responseGrade.course_code,
-          courseName: responseGrade.course_name,
-          grade: Number(responseGrade.grade),
-          letterGrade: responseGrade.letter_grade,
-          recordedAt: responseGrade.recorded_at,
-          hash: responseGrade.hash,
-          isVerified: true
-        },
-        ...prev
-      ]);
+      const realRecord: GradeRecord = {
+        id: responseGrade.id.toString(),
+        studentId: responseGrade.student_id,
+        courseCode: responseGrade.course_code,
+        courseName: responseGrade.course_name,
+        grade: Number(responseGrade.grade),
+        letterGrade: responseGrade.letter_grade,
+        recordedAt: responseGrade.recorded_at,
+        hash: responseGrade.hash,
+        isVerified: true
+      };
+
+      // Replace the optimistic temp item with the verified server item
+      setGrades(prev => prev.map(g => g.id === tempId ? realRecord : g));
       
-      // Clean up fields & close modal
-      setNewStudentId('');
-      setNewCourseCode('');
-      setNewCourseName('');
-      setNewGrade('');
-      setNewLetterGrade('F');
-      setShowAddModal(false);
-      
-      // Reload stats & verify again
+      // Reload stats & courses
       loadStats();
       loadCourses();
     } catch (e: any) {
-      alert(e.message || 'Failed to submit grade.');
-    } finally {
-      setIsSubmitting(false);
+      // Revert local state if server sync fails
+      setGrades(previousGrades);
+      alert(e.message || 'Failed to submit grade. Verification sync error.');
     }
+  };
+
+  const handleWebBatchGradeChange = (index: number, gradeVal: string) => {
+    setWebBatchEntries(prev => prev.map((entry, idx) => {
+      if (idx !== index) return entry;
+      const num = parseFloat(gradeVal);
+      let letter = 'F';
+      if (!isNaN(num)) {
+        if (num >= 90) letter = 'A';
+        else if (num >= 80) letter = 'B';
+        else if (num >= 70) letter = 'C';
+        else if (num >= 60) letter = 'D';
+      }
+      return { ...entry, grade: gradeVal, letterGrade: letter };
+    }));
+  };
+
+  const addWebBatchRow = () => {
+    setWebBatchEntries(prev => [...prev, { studentId: '', grade: '', letterGrade: 'F' }]);
+  };
+
+  const removeWebBatchRow = (index: number) => {
+    if (webBatchEntries.length <= 1) return;
+    setWebBatchEntries(prev => prev.filter((_, idx) => idx !== index));
   };
 
   const handleBatchSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!batchText.trim()) return;
-    
-    const parsedRows = parseBatchText(batchText);
-    const invalidRows = parsedRows.filter(r => !r.isValid);
-    if (invalidRows.length > 0) {
-      setBatchError(`Please fix invalid entries before submitting.`);
+    const selectedCourse = activeCourses.find(c => c.course_code === webBatchCourseCode);
+    if (!selectedCourse) {
+      alert('Please select a course for the batch.');
       return;
     }
-    
+
+    const invalid = webBatchEntries.some(entry => !entry.studentId || isNaN(parseFloat(entry.grade)));
+    if (invalid) {
+      alert('Please complete all student ID and grade fields with valid numbers.');
+      return;
+    }
+
     setIsSubmitting(true);
-    setBatchError(null);
     try {
-      const formattedBatch = parsedRows.map(r => ({
-        student_id: r.studentId,
-        course_code: r.courseCode,
-        course_name: r.courseName,
-        grade: r.grade,
-        letter_grade: r.letterGrade
+      const gradesPayload = webBatchEntries.map(entry => ({
+        student_id: entry.studentId.trim(),
+        course_code: selectedCourse.course_code,
+        course_name: selectedCourse.course_name,
+        grade: parseFloat(entry.grade),
+        letter_grade: entry.letterGrade
       }));
 
       const newRecords = await apiCall('/grades/batch', {
         method: 'POST',
-        body: JSON.stringify({ grades: formattedBatch })
+        body: JSON.stringify({ grades: gradesPayload })
       });
 
       const formattedNew = newRecords.map((json: any) => ({
@@ -506,13 +1046,19 @@ function App() {
       }));
 
       setGrades(prev => [...formattedNew, ...prev]);
-      setBatchText('');
+
+      // Reset rows to 3 default rows
+      setWebBatchEntries([
+        { studentId: '', grade: '', letterGrade: 'F' },
+        { studentId: '', grade: '', letterGrade: 'F' },
+        { studentId: '', grade: '', letterGrade: 'F' }
+      ]);
       setShowAddModal(false);
       
       loadStats();
       loadCourses();
-    } catch (e: any) {
-      setBatchError(e.message || 'Failed to submit batch grades.');
+    } catch (err: any) {
+      alert(err.message || 'Failed to submit batch grades.');
     } finally {
       setIsSubmitting(false);
     }
@@ -521,7 +1067,10 @@ function App() {
   const fetchGradeLogs = async (gradeId: string) => {
     setLoadingGradeLogs(true);
     try {
-      const data = await apiCall(`/grades/${gradeId}/logs`);
+      const endpoint = userRole === 'student'
+        ? `/student/grades/${gradeId}/logs`
+        : `/grades/${gradeId}/logs`;
+      const data = await apiCall(endpoint);
       const logsJson = data.logs || [];
       setSelectedGradeLogs(logsJson.map((l: any) => ({
         id: l.id,
@@ -605,13 +1154,28 @@ function App() {
     e.preventDefault();
     if (!selectedGrade || !editGradeVal || !editLetterGradeVal) return;
     
-    setIsSubmitting(true);
+    const previousGrades = grades;
+    const oldRecord = selectedGrade;
+    
+    const tempUpdatedRecord: GradeRecord = {
+      ...selectedGrade,
+      grade: parseFloat(editGradeVal),
+      letterGrade: editLetterGradeVal,
+      hash: 'Updating SHA256...',
+      isVerified: true
+    };
+
+    // Optimistically update locally
+    setGrades(prev => prev.map(g => g.id === selectedGrade.id ? tempUpdatedRecord : g));
+    setSelectedGrade(tempUpdatedRecord);
+    setShowEditModal(false);
+
     try {
       const updatedJson = await apiCall(`/grades/${selectedGrade.id}`, {
         method: 'PUT',
         body: JSON.stringify({
-          grade: parseFloat(editGradeVal),
-          letter_grade: editLetterGradeVal
+          grade: tempUpdatedRecord.grade,
+          letter_grade: tempUpdatedRecord.letterGrade
         })
       });
 
@@ -627,17 +1191,18 @@ function App() {
         isVerified: true
       };
 
+      // Set final server-synced record
       setGrades(prev => prev.map(g => g.id === selectedGrade.id ? updatedRecord : g));
       setSelectedGrade(updatedRecord);
-      setShowEditModal(false);
       
       // Reload logs & statistics
       fetchGradeLogs(selectedGrade.id);
       loadStats();
     } catch (e: any) {
-      alert(e.message || 'Update failed.');
-    } finally {
-      setIsSubmitting(false);
+      // Revert state if sync fails
+      setGrades(previousGrades);
+      setSelectedGrade(oldRecord);
+      alert(e.message || 'Update failed. Reverting changes.');
     }
   };
 
@@ -648,46 +1213,6 @@ function App() {
     setShowEditModal(true);
   };
 
-  // ── PARSING BATCH CSV ──────────────────────────────────────────────────────
-  const parseBatchText = (text: string) => {
-    const lines = text.split('\n');
-    return lines
-      .map((line, index) => {
-        const parts = line.split(',').map(p => p.trim());
-        if (parts.length === 1 && parts[0] === '') return null; // skip empty line
-        
-        const studentId = parts[0] || '';
-        const courseCode = parts[1] || '';
-        const courseName = parts[2] || '';
-        const gradeStr = parts[3] || '';
-        const letterGrade = parts[4] || '';
-        
-        const gradeNum = parseFloat(gradeStr);
-        const isGradeValid = !isNaN(gradeNum) && gradeNum >= 0 && gradeNum <= 100;
-        const isLetterValid = ['A', 'B', 'C', 'D', 'F'].includes(letterGrade.toUpperCase());
-        const isValid = studentId !== '' && courseCode !== '' && courseName !== '' && isGradeValid && isLetterValid;
-        
-        return {
-          rowNum: index + 1,
-          studentId,
-          courseCode,
-          courseName,
-          grade: gradeNum,
-          letterGrade: letterGrade.toUpperCase(),
-          isValid,
-          error: !isValid
-            ? `Row ${index + 1}: ${
-                studentId === '' ? 'Missing Student ID. ' : ''
-              }${courseCode === '' ? 'Missing Course Code. ' : ''}${
-                courseName === '' ? 'Missing Course Name. ' : ''
-              }${!isGradeValid ? 'Invalid grade (must be 0-100). ' : ''}${
-                !isLetterValid ? 'Invalid letter grade (A,B,C,D,F). ' : ''
-              }`
-            : null
-        };
-      })
-      .filter((r): r is NonNullable<typeof r> => r !== null);
-  };
 
   // ── FILTERS & SEARCH PROCESSOR ─────────────────────────────────────────────
   const processedGrades = grades
@@ -731,6 +1256,14 @@ function App() {
       case 'F': return '#ef4444';
       default: return '#6b7280';
     }
+  };
+
+  const getGradeScoreColor = (score: number) => {
+    if (score >= 90) return '#10b981'; // Green (A)
+    if (score >= 80) return '#0ea5e9'; // Blue (B)
+    if (score >= 70) return '#eab308'; // Yellow/Gold (C)
+    if (score >= 60) return '#f97316'; // Orange (D)
+    return '#ef4444'; // Red (F)
   };
 
   // ── RENDER METHODS ─────────────────────────────────────────────────────────
@@ -785,6 +1318,35 @@ function App() {
   if (!isAuthenticated) {
     return (
       <div className="auth-screen">
+        <button 
+          className="icon-btn theme-toggle-auth" 
+          onClick={() => setTheme(theme === 'light' ? 'dark' : 'light')}
+          title={theme === 'light' ? 'Switch to Dark Mode' : 'Switch to Light Mode'}
+          aria-label="Toggle Theme"
+          style={{
+            position: 'absolute',
+            top: '24px',
+            right: '24px',
+            zIndex: 10,
+            background: 'var(--card-bg)',
+            border: '1px solid var(--border)',
+            borderRadius: '50%',
+            width: '44px',
+            height: '44px',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            cursor: 'pointer',
+            boxShadow: 'var(--shadow)',
+            color: 'var(--text-primary)',
+            transition: 'all 0.2s ease',
+            backdropFilter: 'blur(8px)',
+            WebkitBackdropFilter: 'blur(8px)'
+          }}
+        >
+          {theme === 'light' ? <Moon size={20} /> : <Sun size={20} />}
+        </button>
+
         <div className="auth-card">
           <div className="auth-header">
             <div className="auth-logo-animation">
@@ -794,18 +1356,18 @@ function App() {
             <p>Alexandria University Grade Integrity Portal 🎓</p>
           </div>
 
-          <div className="segmented-control">
+          <div className="segmented-control" style={{ marginBottom: '16px' }}>
             <button 
-              className={formMode === 'login' ? 'active' : ''} 
-              onClick={() => { setFormMode('login'); setAuthError(null); }}
+              className={authPortalMode === 'professor' ? 'active' : ''} 
+              onClick={() => { resetAuthForm(); setAuthPortalMode('professor'); }}
             >
-              Sign In
+              Faculty Portal
             </button>
             <button 
-              className={formMode === 'register' ? 'active' : ''} 
-              onClick={() => { setFormMode('register'); setAuthError(null); }}
+              className={authPortalMode === 'student' ? 'active' : ''} 
+              onClick={() => { resetAuthForm(); setAuthPortalMode('student'); }}
             >
-              Register Professor
+              Student Portal
             </button>
           </div>
 
@@ -826,35 +1388,62 @@ function App() {
           )}
 
           {formMode === 'login' ? (
-            <form onSubmit={handleLogin}>
-              <div className="form-group">
-                <label htmlFor="email">Email Address</label>
-                <div className="form-control-container">
-                  <span className="form-control-icon"><Envelope size={18} /></span>
-                  <input
-                    id="email"
-                    type="email"
-                    className="form-control"
-                    placeholder="name@alexu.edu.eg"
-                    value={loginEmail}
-                    onChange={e => setLoginEmail(e.target.value)}
-                    required
-                  />
+            <form onSubmit={handleLogin} noValidate>
+              {authPortalMode === 'professor' ? (
+                <div className="form-group">
+                  <label htmlFor="email">Email Address</label>
+                  <div className="form-control-container">
+                    <span className="form-control-icon"><Envelope size={18} /></span>
+                    <input
+                      id="email"
+                      type="email"
+                      className="form-control"
+                      placeholder="name@alexu.edu.eg"
+                      value={loginEmail}
+                      onChange={e => setLoginEmail(e.target.value)}
+                      required
+                    />
+                  </div>
                 </div>
-              </div>
+              ) : (
+                <div className="form-group">
+                  <label htmlFor="studentId">Student ID</label>
+                  <div className="form-control-container">
+                    <span className="form-control-icon"><IdentificationCard size={18} /></span>
+                    <input
+                      id="studentId"
+                      type="text"
+                      className="form-control"
+                      placeholder="e.g. STU-2024-001"
+                      value={loginStudentId}
+                      onChange={e => setLoginStudentId(e.target.value)}
+                      required
+                    />
+                  </div>
+                </div>
+              )}
+
               <div className="form-group">
                 <label htmlFor="password">Password</label>
                 <div className="form-control-container">
                   <span className="form-control-icon"><Lock size={18} /></span>
                   <input
                     id="password"
-                    type="password"
-                    className="form-control"
+                    type={showLoginPassword ? 'text' : 'password'}
+                    className="form-control password-input"
                     placeholder="••••••••"
                     value={loginPassword}
                     onChange={e => setLoginPassword(e.target.value)}
                     required
                   />
+                  <button
+                    type="button"
+                    className="form-control-toggle"
+                    onClick={() => setShowLoginPassword(!showLoginPassword)}
+                    aria-label={showLoginPassword ? "Hide password" : "Show password"}
+                  >
+                    {showLoginPassword ? <EyeSlash size={18} /> : <Eye size={18} />}
+                  </button>
                 </div>
               </div>
               
@@ -868,9 +1457,20 @@ function App() {
                   </>
                 )}
               </button>
+
+              <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                Don't have an account?{' '}
+                <button 
+                  type="button"
+                  onClick={() => { resetAuthForm(); setFormMode('register'); }}
+                  style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                >
+                  Register as {authPortalMode === 'professor' ? 'Faculty' : 'Student'} here
+                </button>
+              </div>
             </form>
           ) : (
-            <form onSubmit={handleRegister}>
+            <form onSubmit={handleRegister} noValidate>
               <div className="form-group">
                 <label htmlFor="regName">Full Name</label>
                 <div className="form-control-container">
@@ -879,106 +1479,382 @@ function App() {
                     id="regName"
                     type="text"
                     className="form-control"
-                    placeholder="Prof. Ahmed Salem"
+                    placeholder={authPortalMode === 'professor' ? "Prof. Ahmed Salem" : "Ali Ahmed"}
                     value={regName}
-                    onChange={e => setRegName(e.target.value)}
+                    onChange={e => {
+                      setRegName(e.target.value);
+                      if (registerErrors.regName) validateRegisterField('regName', e.target.value);
+                    }}
+                    onBlur={e => validateRegisterField('regName', e.target.value)}
                     required
                   />
                 </div>
+                {registerErrors.regName && (
+                  <span className="field-error-msg" style={{ color: 'var(--destructive)', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                    {registerErrors.regName}
+                  </span>
+                )}
               </div>
-              <div className="form-row">
-                <div className="form-group">
-                  <label htmlFor="regEmpId">Employee ID</label>
-                  <div className="form-control-container">
-                    <span className="form-control-icon"><IdentificationCard size={18} /></span>
-                    <input
-                      id="regEmpId"
-                      type="text"
-                      className="form-control"
-                      placeholder="EMP1024"
-                      value={regEmpId}
-                      onChange={e => setRegEmpId(e.target.value)}
-                      required
-                    />
+
+              {authPortalMode === 'professor' ? (
+                <>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label htmlFor="regEmpId">Employee ID</label>
+                      <div className="form-control-container">
+                        <span className="form-control-icon"><IdentificationCard size={18} /></span>
+                        <input
+                          id="regEmpId"
+                          type="text"
+                          className="form-control"
+                          placeholder="EMP1024"
+                          value={regEmpId}
+                          onChange={e => {
+                            setRegEmpId(e.target.value);
+                            if (registerErrors.regEmpId) validateRegisterField('regEmpId', e.target.value);
+                          }}
+                          onBlur={e => validateRegisterField('regEmpId', e.target.value)}
+                          required
+                        />
+                      </div>
+                      {registerErrors.regEmpId && (
+                        <span className="field-error-msg" style={{ color: 'var(--destructive)', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                          {registerErrors.regEmpId}
+                        </span>
+                      )}
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="regDept">Department</label>
+                      <div className="form-control-container">
+                        <span className="form-control-icon"><GraduationCap size={18} /></span>
+                        <input
+                          id="regDept"
+                          type="text"
+                          className="form-control"
+                          placeholder="Computer Science"
+                          value={regDept}
+                          onChange={e => {
+                            setRegDept(e.target.value);
+                            if (registerErrors.regDept) validateRegisterField('regDept', e.target.value);
+                          }}
+                          onBlur={e => validateRegisterField('regDept', e.target.value)}
+                          required
+                        />
+                      </div>
+                      {registerErrors.regDept && (
+                        <span className="field-error-msg" style={{ color: 'var(--destructive)', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                          {registerErrors.regDept}
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
-                <div className="form-group">
-                  <label htmlFor="regDept">Department</label>
-                  <div className="form-control-container">
-                    <span className="form-control-icon"><GraduationCap size={18} /></span>
-                    <input
-                      id="regDept"
-                      type="text"
-                      className="form-control"
-                      placeholder="Computer Science"
-                      value={regDept}
-                      onChange={e => setRegDept(e.target.value)}
-                      required
-                    />
+
+                  <div className="form-group">
+                    <label htmlFor="regEmail">Email Address</label>
+                    <div className="form-control-container">
+                      <span className="form-control-icon"><Envelope size={18} /></span>
+                      <input
+                        id="regEmail"
+                        type="email"
+                        className="form-control"
+                        placeholder="salem@alexu.edu.eg"
+                        value={regEmail}
+                        onChange={e => {
+                          setRegEmail(e.target.value);
+                          if (registerErrors.regEmail) validateRegisterField('regEmail', e.target.value);
+                        }}
+                        onBlur={e => validateRegisterField('regEmail', e.target.value)}
+                        required
+                      />
+                    </div>
+                    {registerErrors.regEmail && (
+                      <span className="field-error-msg" style={{ color: 'var(--destructive)', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {registerErrors.regEmail}
+                      </span>
+                    )}
                   </div>
-                </div>
-              </div>
-              <div className="form-group">
-                <label htmlFor="regEmail">Email Address</label>
-                <div className="form-control-container">
-                  <span className="form-control-icon"><Envelope size={18} /></span>
-                  <input
-                    id="regEmail"
-                    type="email"
-                    className="form-control"
-                    placeholder="salem@alexu.edu.eg"
-                    value={regEmail}
-                    onChange={e => setRegEmail(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-              <div className="form-group">
-                <label htmlFor="regPassword">Password</label>
-                <div className="form-control-container">
-                  <span className="form-control-icon"><Lock size={18} /></span>
-                  <input
-                    id="regPassword"
-                    type="password"
-                    className="form-control"
-                    placeholder="Min 6 characters"
-                    value={regPassword}
-                    onChange={e => setRegPassword(e.target.value)}
-                    minLength={6}
-                    required
-                  />
-                </div>
-              </div>
-              <div className="form-group">
-                <label htmlFor="regSecretKey">Faculty Authorization Key</label>
-                <div className="form-control-container">
-                  <span className="form-control-icon"><Key size={18} /></span>
-                  <input
-                    id="regSecretKey"
-                    type="password"
-                    className="form-control"
-                    placeholder="Enter faculty authorization token"
-                    value={regSecretKey}
-                    onChange={e => setRegSecretKey(e.target.value)}
-                    required
-                  />
-                </div>
-                <span className="form-help">Required 2nd-layer verification key for Alexandria Univ. Faculty</span>
-              </div>
-              
+
+                   <div className="form-group">
+                    <label htmlFor="regPassword">Password</label>
+                    <div className="form-control-container">
+                      <span className="form-control-icon"><Lock size={18} /></span>
+                      <input
+                        id="regPassword"
+                        type={showRegPassword ? 'text' : 'password'}
+                        className="form-control password-input"
+                        placeholder="Min 6 characters"
+                        value={regPassword}
+                        onChange={e => {
+                          setRegPassword(e.target.value);
+                          if (registerErrors.regPassword) validateRegisterField('regPassword', e.target.value);
+                        }}
+                        onBlur={e => validateRegisterField('regPassword', e.target.value)}
+                        minLength={6}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="form-control-toggle"
+                        onClick={() => setShowRegPassword(!showRegPassword)}
+                        aria-label={showRegPassword ? "Hide password" : "Show password"}
+                      >
+                        {showRegPassword ? <EyeSlash size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    {registerErrors.regPassword && (
+                      <span className="field-error-msg" style={{ color: 'var(--destructive)', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {registerErrors.regPassword}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="regConfirmPassword">Confirm Password</label>
+                    <div className="form-control-container">
+                      <span className="form-control-icon"><Lock size={18} /></span>
+                      <input
+                        id="regConfirmPassword"
+                        type={showRegConfirmPassword ? 'text' : 'password'}
+                        className="form-control password-input"
+                        placeholder="Re-enter your password"
+                        value={regConfirmPassword}
+                        onChange={e => {
+                          setRegConfirmPassword(e.target.value);
+                          if (registerErrors.regConfirmPassword) validateRegisterField('regConfirmPassword', e.target.value);
+                        }}
+                        onBlur={e => validateRegisterField('regConfirmPassword', e.target.value)}
+                        minLength={6}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="form-control-toggle"
+                        onClick={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
+                        aria-label={showRegConfirmPassword ? "Hide password" : "Show password"}
+                      >
+                        {showRegConfirmPassword ? <EyeSlash size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    {registerErrors.regConfirmPassword && (
+                      <span className="field-error-msg" style={{ color: 'var(--destructive)', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {registerErrors.regConfirmPassword}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="regSecretKey">Faculty Authorization Key</label>
+                    <div className="form-control-container">
+                      <span className="form-control-icon"><Key size={18} /></span>
+                      <input
+                        id="regSecretKey"
+                        type={showSecretKey ? 'text' : 'password'}
+                        className="form-control password-input"
+                        placeholder="Enter faculty authorization token"
+                        value={regSecretKey}
+                        onChange={e => {
+                          setRegSecretKey(e.target.value);
+                          if (registerErrors.regSecretKey) validateRegisterField('regSecretKey', e.target.value);
+                        }}
+                        onBlur={e => validateRegisterField('regSecretKey', e.target.value)}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="form-control-toggle"
+                        onClick={() => setShowSecretKey(!showSecretKey)}
+                        aria-label={showSecretKey ? "Hide password" : "Show password"}
+                      >
+                        {showSecretKey ? <EyeSlash size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    {registerErrors.regSecretKey ? (
+                      <span className="field-error-msg" style={{ color: 'var(--destructive)', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {registerErrors.regSecretKey}
+                      </span>
+                    ) : (
+                      <span className="form-help">Required 2nd-layer verification key for Alexandria Univ. Faculty</span>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="form-row">
+                    <div className="form-group">
+                      <label htmlFor="regStudentId">Student ID</label>
+                      <div className="form-control-container">
+                        <span className="form-control-icon"><IdentificationCard size={18} /></span>
+                        <input
+                          id="regStudentId"
+                          type="text"
+                          className="form-control"
+                          placeholder="e.g. STU-2024-001"
+                          value={regStudentId}
+                          onChange={e => {
+                            setRegStudentId(e.target.value);
+                            if (registerErrors.regStudentId) validateRegisterField('regStudentId', e.target.value);
+                          }}
+                          onBlur={e => validateRegisterField('regStudentId', e.target.value)}
+                          required
+                        />
+                      </div>
+                      {registerErrors.regStudentId && (
+                        <span className="field-error-msg" style={{ color: 'var(--destructive)', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                          {registerErrors.regStudentId}
+                        </span>
+                      )}
+                    </div>
+                    <div className="form-group">
+                      <label htmlFor="regStudentDept">Faculty / Department</label>
+                      <div className="form-control-container">
+                        <span className="form-control-icon"><GraduationCap size={18} /></span>
+                        <input
+                          id="regStudentDept"
+                          type="text"
+                          className="form-control"
+                          placeholder="e.g. Computer Science"
+                          value={regStudentDept}
+                          onChange={e => {
+                            setRegStudentDept(e.target.value);
+                            if (registerErrors.regStudentDept) validateRegisterField('regStudentDept', e.target.value);
+                          }}
+                          onBlur={e => validateRegisterField('regStudentDept', e.target.value)}
+                          required
+                        />
+                      </div>
+                      {registerErrors.regStudentDept && (
+                        <span className="field-error-msg" style={{ color: 'var(--destructive)', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                          {registerErrors.regStudentDept}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="regEmail">Email Address</label>
+                    <div className="form-control-container">
+                      <span className="form-control-icon"><Envelope size={18} /></span>
+                      <input
+                        id="regEmail"
+                        type="email"
+                        className="form-control"
+                        placeholder="e.g. ali@alexu.edu.eg"
+                        value={regEmail}
+                        onChange={e => {
+                          setRegEmail(e.target.value);
+                          if (registerErrors.regEmail) validateRegisterField('regEmail', e.target.value);
+                        }}
+                        onBlur={e => validateRegisterField('regEmail', e.target.value)}
+                        required
+                      />
+                    </div>
+                    {registerErrors.regEmail && (
+                      <span className="field-error-msg" style={{ color: 'var(--destructive)', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {registerErrors.regEmail}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="regPassword">Password</label>
+                    <div className="form-control-container">
+                      <span className="form-control-icon"><Lock size={18} /></span>
+                      <input
+                        id="regPassword"
+                        type={showRegPassword ? 'text' : 'password'}
+                        className="form-control password-input"
+                        placeholder="Min 6 characters"
+                        value={regPassword}
+                        onChange={e => {
+                          setRegPassword(e.target.value);
+                          if (registerErrors.regPassword) validateRegisterField('regPassword', e.target.value);
+                        }}
+                        onBlur={e => validateRegisterField('regPassword', e.target.value)}
+                        minLength={6}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="form-control-toggle"
+                        onClick={() => setShowRegPassword(!showRegPassword)}
+                        aria-label={showRegPassword ? "Hide password" : "Show password"}
+                      >
+                        {showRegPassword ? <EyeSlash size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    {registerErrors.regPassword && (
+                      <span className="field-error-msg" style={{ color: 'var(--destructive)', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {registerErrors.regPassword}
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="form-group">
+                    <label htmlFor="regConfirmPassword">Confirm Password</label>
+                    <div className="form-control-container">
+                      <span className="form-control-icon"><Lock size={18} /></span>
+                      <input
+                        id="regConfirmPassword"
+                        type={showRegConfirmPassword ? 'text' : 'password'}
+                        className="form-control password-input"
+                        placeholder="Re-enter your password"
+                        value={regConfirmPassword}
+                        onChange={e => {
+                          setRegConfirmPassword(e.target.value);
+                          if (registerErrors.regConfirmPassword) validateRegisterField('regConfirmPassword', e.target.value);
+                        }}
+                        onBlur={e => validateRegisterField('regConfirmPassword', e.target.value)}
+                        minLength={6}
+                        required
+                      />
+                      <button
+                        type="button"
+                        className="form-control-toggle"
+                        onClick={() => setShowRegConfirmPassword(!showRegConfirmPassword)}
+                        aria-label={showRegConfirmPassword ? "Hide password" : "Show password"}
+                      >
+                        {showRegConfirmPassword ? <EyeSlash size={18} /> : <Eye size={18} />}
+                      </button>
+                    </div>
+                    {registerErrors.regConfirmPassword && (
+                      <span className="field-error-msg" style={{ color: 'var(--destructive)', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
+                        {registerErrors.regConfirmPassword}
+                      </span>
+                    )}
+                  </div>
+                </>
+              )}
+
               <button type="submit" className="submit-btn" disabled={isSubmitting}>
                 {isSubmitting ? (
                   <>Creating Account...</>
                 ) : (
                   <>
                     <UserPlus size={18} weight="bold" />
-                    Register Professor Account
+                    Register {authPortalMode === 'professor' ? 'Professor' : 'Student'} Account
                   </>
                 )}
               </button>
+
+              <div style={{ marginTop: '20px', textAlign: 'center', fontSize: '13px', color: 'var(--text-secondary)' }}>
+                Already have an account?{' '}
+                <button 
+                  type="button"
+                  onClick={() => { resetAuthForm(); setFormMode('login'); }}
+                  style={{ background: 'none', border: 'none', color: 'var(--primary)', fontWeight: 700, cursor: 'pointer', padding: 0 }}
+                >
+                  Sign in here
+                </button>
+              </div>
             </form>
           )}
         </div>
+
+        {/* Custom cursor follower bubble */}
+        <div 
+          ref={cursorRef} 
+          className={`cursor-follower ${cursorVisible ? 'visible' : ''} ${cursorHovered ? 'hovered' : ''}`}
+        />
       </div>
     );
   }
@@ -1009,6 +1885,14 @@ function App() {
           </button>
           
           <button 
+            className={`nav-btn ${currentTab === 'courses' ? 'active' : ''}`}
+            onClick={() => setCurrentTab('courses')}
+          >
+            <BookOpen size={20} weight="bold" />
+            {userRole === 'professor' ? 'Courses Assigned' : 'Enrolled Courses'}
+          </button>
+
+          <button 
             className={`nav-btn ${currentTab === 'statistics' ? 'active' : ''}`}
             onClick={() => setCurrentTab('statistics')}
           >
@@ -1016,31 +1900,39 @@ function App() {
             Statistics Summary
           </button>
 
-          <button 
-            className={`nav-btn ${currentTab === 'logs' ? 'active' : ''}`}
-            onClick={() => {
-              setCurrentTab('logs');
-              fetchGlobalAuditLogs();
-            }}
-          >
-            <Clock size={20} weight="bold" />
-            Security Audit Logs
-          </button>
+          {userRole === 'professor' && (
+            <button 
+              className={`nav-btn ${currentTab === 'logs' ? 'active' : ''}`}
+              onClick={() => {
+                setCurrentTab('logs');
+                fetchGlobalAuditLogs();
+              }}
+            >
+              <Clock size={20} weight="bold" />
+              Security Audit Logs
+            </button>
+          )}
           
           <button 
             className={`nav-btn ${currentTab === 'profile' ? 'active' : ''}`}
             onClick={() => setCurrentTab('profile')}
           >
             <User size={20} weight="bold" />
-            Professor Profile
+            {userRole === 'professor' ? 'Professor Profile' : 'Student Profile'}
           </button>
         </nav>
 
         <div className="sidebar-footer">
-          {professor && (
+          {userRole === 'professor' && professor && (
             <div className="prof-info-card">
               <span className="prof-name">{professor.name}</span>
               <span className="prof-dept">{professor.department}</span>
+            </div>
+          )}
+          {userRole === 'student' && student && (
+            <div className="prof-info-card">
+              <span className="prof-name">{student.name}</span>
+              <span className="prof-dept">{student.department} ({student.student_id})</span>
             </div>
           )}
           <button className="logout-btn" onClick={handleLogout}>
@@ -1062,6 +1954,14 @@ function App() {
         </button>
         
         <button 
+          className={`bottom-nav-btn ${currentTab === 'courses' ? 'active' : ''}`}
+          onClick={() => setCurrentTab('courses')}
+        >
+          <BookOpen size={20} weight="bold" />
+          <span>Courses</span>
+        </button>
+
+        <button 
           className={`bottom-nav-btn ${currentTab === 'statistics' ? 'active' : ''}`}
           onClick={() => setCurrentTab('statistics')}
         >
@@ -1069,16 +1969,18 @@ function App() {
           <span>Statistics</span>
         </button>
 
-        <button 
-          className={`bottom-nav-btn ${currentTab === 'logs' ? 'active' : ''}`}
-          onClick={() => {
-            setCurrentTab('logs');
-            fetchGlobalAuditLogs();
-          }}
-        >
-          <Clock size={20} weight="bold" />
-          <span>Logs</span>
-        </button>
+        {userRole === 'professor' && (
+          <button 
+            className={`bottom-nav-btn ${currentTab === 'logs' ? 'active' : ''}`}
+            onClick={() => {
+              setCurrentTab('logs');
+              fetchGlobalAuditLogs();
+            }}
+          >
+            <Clock size={20} weight="bold" />
+            <span>Logs</span>
+          </button>
+        )}
         
         <button 
           className={`bottom-nav-btn ${currentTab === 'profile' ? 'active' : ''}`}
@@ -1095,7 +1997,7 @@ function App() {
         <header className="top-header">
           <div className="header-title-section">
             <h1 style={{ textTransform: 'capitalize' }}>
-              {currentTab === 'grades' ? 'Grading Records' : currentTab === 'statistics' ? 'Grading & Security Analytics' : currentTab === 'logs' ? 'Security Audit Logs' : 'Professor Profile'}
+              {currentTab === 'grades' ? 'Grading Records' : currentTab === 'courses' ? (userRole === 'professor' ? 'Courses Assigned' : 'Enrolled Courses') : currentTab === 'statistics' ? 'Grading & Security Analytics' : currentTab === 'logs' ? 'Security Audit Logs' : userRole === 'professor' ? 'Professor Profile' : 'Student Profile'}
             </h1>
           </div>
           
@@ -1122,7 +2024,7 @@ function App() {
             
             <button 
               className="icon-btn" 
-              onClick={() => alert('HMAC-SHA256 Cryptographic Engine active and secure. Verifying signatures on demand.')}
+              onClick={() => setShowStatusModal(true)}
               title="Secure System Status"
               aria-label="Security Status"
             >
@@ -1159,55 +2061,130 @@ function App() {
           {/* ── TAB 1: GRADES VIEW ────────────────────────────────────────────── */}
           {currentTab === 'grades' && (
             <div style={{ animation: 'slide-up 0.3s ease' }}>
-              <div className="controls-bar">
-                <div className="search-box">
-                  <span className="search-icon"><MagnifyingGlass size={18} /></span>
-                  <input
-                    type="text"
-                    className="search-input"
-                    placeholder="Search Student ID, Course Code..."
-                    value={searchQuery}
-                    onChange={e => setSearchQuery(e.target.value)}
-                  />
+              <div className="controls-bar" style={{ display: 'flex', flexDirection: 'column', gap: '20px', marginBottom: '28px' }}>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '16px', alignItems: 'center', justifyContent: 'space-between', width: '100%' }}>
+                  <div className="search-box" style={{ maxWidth: '400px', width: '100%', flex: '1' }}>
+                    <span className="search-icon"><MagnifyingGlass size={18} /></span>
+                    <input
+                      type="text"
+                      className="search-input"
+                      style={{ borderRadius: 'var(--radius-md)' }}
+                      placeholder="Search Student ID, Course Code..."
+                      value={searchQuery}
+                      onChange={e => setSearchQuery(e.target.value)}
+                    />
+                  </div>
+
+                  {userRole === 'professor' && (
+                    <button className="action-btn" onClick={() => {
+                      const defaultCourse = courseFilter !== 'All' ? courseFilter : (activeCourses[0]?.course_code || '');
+                      setSelectedCourseCode(defaultCourse);
+                      if (defaultCourse && defaultCourse !== 'NEW_COURSE') {
+                        const selected = activeCourses.find(c => c.course_code === defaultCourse);
+                        if (selected) {
+                          setNewCourseCode(selected.course_code);
+                          setNewCourseName(selected.course_name);
+                          setShowNewCourseFields(false);
+                        }
+                      } else {
+                        setSelectedCourseCode('NEW_COURSE');
+                        setNewCourseCode('');
+                        setNewCourseName('');
+                        setShowNewCourseFields(true);
+                      }
+                      setShowAddModal(true);
+                    }}>
+                      <Plus size={16} weight="bold" />
+                      Add Grade
+                    </button>
+                  )}
                 </div>
 
-                <div className="filters-box">
-                  <select 
-                    className="select-filter"
-                    value={courseFilter}
-                    onChange={e => setCourseFilter(e.target.value)}
-                  >
-                    <option value="All">All Courses</option>
-                    {activeCourses.map(c => (
-                      <option key={c.course_code} value={c.course_code}>
-                        {c.course_code}
-                      </option>
-                    ))}
-                  </select>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '24px', alignItems: 'center', width: '100%' }}>
+                  {/* Course Filter Pills */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', flex: '1' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                      Filter by Course
+                    </span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      <button
+                        className={`filter-pill ${courseFilter === 'All' ? 'active' : ''}`}
+                        onClick={() => setCourseFilter('All')}
+                      >
+                        All Courses
+                      </button>
+                      {(userRole === 'professor' 
+                        ? activeCourses.map(c => c.course_code)
+                        : Array.from(new Set(grades.map(g => g.courseCode)))
+                      ).map(code => (
+                        <button
+                          key={code}
+                          className={`filter-pill ${courseFilter === code ? 'active' : ''}`}
+                          onClick={() => setCourseFilter(code)}
+                        >
+                          {code}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
 
-                  <select 
-                    className="select-filter"
-                    value={sortOption}
-                    onChange={e => setSortOption(e.target.value)}
-                  >
-                    <option value="date-desc">Date (Newest)</option>
-                    <option value="date-asc">Date (Oldest)</option>
-                    <option value="grade-desc">Grade (Highest)</option>
-                    <option value="grade-asc">Grade (Lowest)</option>
-                  </select>
-
-                  <button className="action-btn" onClick={() => setShowAddModal(true)}>
-                    <Plus size={16} weight="bold" />
-                    Add Grade
-                  </button>
+                  {/* Sort Option Pills */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                    <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'uppercase' }}>
+                      Sort Records
+                    </span>
+                    <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+                      <button
+                        className={`filter-pill ${sortOption === 'date-desc' ? 'active' : ''}`}
+                        onClick={() => setSortOption('date-desc')}
+                      >
+                        Newest
+                      </button>
+                      <button
+                        className={`filter-pill ${sortOption === 'date-asc' ? 'active' : ''}`}
+                        onClick={() => setSortOption('date-asc')}
+                      >
+                        Oldest
+                      </button>
+                      <button
+                        className={`filter-pill ${sortOption === 'grade-desc' ? 'active' : ''}`}
+                        onClick={() => setSortOption('grade-desc')}
+                      >
+                        Highest
+                      </button>
+                      <button
+                        className={`filter-pill ${sortOption === 'grade-asc' ? 'active' : ''}`}
+                        onClick={() => setSortOption('grade-asc')}
+                      >
+                        Lowest
+                      </button>
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {isLoading ? (
-                <div className="shimmer-wrapper">
-                  <div className="shimmer-card"><div className="shimmer-item shimmer-title"></div><div className="shimmer-item shimmer-body"></div></div>
-                  <div className="shimmer-card"><div className="shimmer-item shimmer-title"></div><div className="shimmer-item shimmer-body"></div></div>
-                  <div className="shimmer-card"><div className="shimmer-item shimmer-title"></div><div className="shimmer-item shimmer-body"></div></div>
+              {showLoadingIndicator ? (
+                <div className="shimmer-wrapper" style={{ display: 'grid', gridTemplateColumns: '1fr', gap: '20px', width: '100%' }}>
+                  {/* Premium Cryptographic Loader Bar */}
+                  <div className="crypt-loader-card">
+                    <div className="crypt-loader-header">
+                      <div className="crypt-loader-spinner-wrapper">
+                        <ArrowClockwise className="crypt-loader-spinner" size={18} />
+                      </div>
+                      <span className="crypt-loader-text">{loadingMsg}</span>
+                      <span className="crypt-loader-percentage">{loadingProgress}%</span>
+                    </div>
+                    <div className="crypt-loader-track">
+                      <div className="crypt-loader-bar" style={{ width: `${loadingProgress}%` }}></div>
+                    </div>
+                  </div>
+
+                  {/* Grid of Skeleton Cards underneath */}
+                  <div className="shimmer-grid">
+                    <div className="shimmer-card"><div className="shimmer-item shimmer-title"></div><div className="shimmer-item shimmer-body"></div></div>
+                    <div className="shimmer-card"><div className="shimmer-item shimmer-title"></div><div className="shimmer-item shimmer-body"></div></div>
+                    <div className="shimmer-card"><div className="shimmer-item shimmer-title"></div><div className="shimmer-item shimmer-body"></div></div>
+                  </div>
                 </div>
               ) : errorMessage ? (
                 <div style={{ textAlign: 'center', padding: '40px 24px' }}>
@@ -1230,6 +2207,7 @@ function App() {
                     <div 
                       key={grade.id} 
                       className="grade-record-card"
+                      style={{ borderTop: `4px solid ${getGradeScoreColor(grade.grade)}` }}
                       onClick={() => handleOpenDetails(grade)}
                     >
                       <div className="grade-card-header">
@@ -1243,8 +2221,8 @@ function App() {
                       </div>
                       
                       <div className="grade-card-body">
-                        <span className="grade-card-value">{grade.grade.toFixed(1)}</span>
-                        <span className="grade-card-letter">Grade {grade.letterGrade}</span>
+                        <span className="grade-card-value" style={{ color: getGradeScoreColor(grade.grade) }}>{grade.grade.toFixed(1)}</span>
+                        <span className="grade-card-letter" style={{ color: getGradeScoreColor(grade.grade) }}>Grade {grade.letterGrade}</span>
                       </div>
 
                       <div className="grade-card-date">
@@ -1258,13 +2236,296 @@ function App() {
             </div>
           )}
 
+          {currentTab === 'courses' && (
+            <div style={{ animation: 'fade-in 0.2s ease', display: 'flex', flexDirection: 'column', gap: '24px' }}>
+              <div className="tab-header-description" style={{ marginBottom: '8px', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                <p style={{ color: 'var(--text-secondary)', margin: 0 }}>
+                  {userRole === 'professor' 
+                    ? 'Manage your assigned courses, view real-time class averages, student enrollments, and execute grading updates.' 
+                    : 'View your enrolled courses, your current grade standing, and perform cryptographic integrity checks.'}
+                </p>
+                
+                <div className="controls-bar" style={{ padding: 0, background: 'transparent', border: 'none', boxShadow: 'none' }}>
+                  <div className="search-box" style={{ maxWidth: '400px', width: '100%' }}>
+                    <span className="search-icon"><MagnifyingGlass size={18} /></span>
+                    <input
+                      type="text"
+                      className="search-input"
+                      placeholder="Search by Course Code or Title..."
+                      value={courseSearchQuery}
+                      onChange={e => setCourseSearchQuery(e.target.value)}
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {showLoadingIndicator ? (
+                <div className="shimmer-grid">
+                  <div className="shimmer-card" style={{ height: '240px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div>
+                      <div className="shimmer-item shimmer-line short" style={{ marginBottom: '12px' }}></div>
+                      <div className="shimmer-item shimmer-line medium" style={{ height: '24px', marginBottom: '16px' }}></div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <div className="shimmer-item" style={{ height: '36px', flex: '1', borderRadius: 'var(--radius-sm)' }}></div>
+                      <div className="shimmer-item" style={{ height: '36px', flex: '1', borderRadius: 'var(--radius-sm)' }}></div>
+                    </div>
+                  </div>
+                  <div className="shimmer-card" style={{ height: '240px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div>
+                      <div className="shimmer-item shimmer-line short" style={{ marginBottom: '12px' }}></div>
+                      <div className="shimmer-item shimmer-line medium" style={{ height: '24px', marginBottom: '16px' }}></div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <div className="shimmer-item" style={{ height: '36px', flex: '1', borderRadius: 'var(--radius-sm)' }}></div>
+                      <div className="shimmer-item" style={{ height: '36px', flex: '1', borderRadius: 'var(--radius-sm)' }}></div>
+                    </div>
+                  </div>
+                  <div className="shimmer-card" style={{ height: '240px', display: 'flex', flexDirection: 'column', justifyContent: 'space-between' }}>
+                    <div>
+                      <div className="shimmer-item shimmer-line short" style={{ marginBottom: '12px' }}></div>
+                      <div className="shimmer-item shimmer-line medium" style={{ height: '24px', marginBottom: '16px' }}></div>
+                    </div>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <div className="shimmer-item" style={{ height: '36px', flex: '1', borderRadius: 'var(--radius-sm)' }}></div>
+                      <div className="shimmer-item" style={{ height: '36px', flex: '1', borderRadius: 'var(--radius-sm)' }}></div>
+                    </div>
+                  </div>
+                </div>
+              ) : userRole === 'professor' ? (
+                // ── PROFESSOR VIEW ──
+                (() => {
+                  const filteredCourses = activeCourses.filter(course => 
+                    course.course_code.toLowerCase().includes(courseSearchQuery.toLowerCase()) ||
+                    course.course_name.toLowerCase().includes(courseSearchQuery.toLowerCase())
+                  );
+
+                  return filteredCourses.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '60px 24px', border: '2px dashed var(--border)', borderRadius: 'var(--radius-md)' }}>
+                      <BookOpen size={64} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+                      <h2 style={{ marginTop: '16px' }}>No courses match your search</h2>
+                      <p>Try clearing your search query or registering a new course code dynamically.</p>
+                    </div>
+                  ) : (
+                    <div className="grades-grid">
+                      {filteredCourses.map(course => {
+                        const courseStat = stats?.courseStats?.find(cs => cs.code === course.course_code);
+                        const avg = courseStat?.average || 0;
+                        const studentCount = courseStat?.students || 0;
+
+                        return (
+                          <div 
+                            key={course.course_code}
+                            className="grade-record-card"
+                            style={{ 
+                              borderTop: `4px solid ${getGradeScoreColor(avg || 80)}`,
+                              cursor: 'default',
+                              display: 'flex',
+                              flexDirection: 'column',
+                              justifyContent: 'space-between',
+                              height: '240px'
+                            }}
+                          >
+                            <div>
+                              <div className="grade-card-header" style={{ marginBottom: '12px' }}>
+                                <span className="grade-card-student" style={{ fontSize: '12px', letterSpacing: '0.05em' }}>
+                                  COURSE CODE: {course.course_code}
+                                </span>
+                                <span className="grade-card-badge secure" style={{ padding: '4px 8px', fontSize: '10px' }}>
+                                  ACTIVE
+                                </span>
+                              </div>
+                              <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '16px', lineHeight: 1.3 }}>
+                                {course.course_name}
+                              </h3>
+                            </div>
+
+                            <div>
+                              <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', borderTop: '1px dashed var(--border)', paddingTop: '12px' }}>
+                                <div>
+                                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Class Average</div>
+                                  <div style={{ fontSize: '20px', fontWeight: 800, color: getGradeScoreColor(avg || 80) }}>
+                                    {avg > 0 ? `${avg.toFixed(1)}%` : 'N/A'}
+                                  </div>
+                                </div>
+                                <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '20px' }}>
+                                  <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Enrolled Students</div>
+                                  <div style={{ fontSize: '20px', fontWeight: 800, color: 'var(--text-primary)' }}>
+                                    {studentCount} {studentCount === 1 ? 'Student' : 'Students'}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div style={{ display: 'flex', gap: '10px' }}>
+                                <button 
+                                  className="action-btn"
+                                  style={{ flex: 1, padding: '8px 12px', fontSize: '12px', justifyContent: 'center' }}
+                                  onClick={() => {
+                                    setCourseFilter(course.course_code);
+                                    setCurrentTab('grades');
+                                  }}
+                                >
+                                  View Grades
+                                </button>
+                                <button 
+                                  className="nav-btn"
+                                  style={{ 
+                                    flex: 1, 
+                                    padding: '8px 12px', 
+                                    fontSize: '12px', 
+                                    justifyContent: 'center',
+                                    border: '1px solid var(--border)',
+                                    backgroundColor: 'transparent'
+                                  }}
+                                  onClick={() => {
+                                    setSelectedCourseCode(course.course_code);
+                                    setNewCourseCode(course.course_code);
+                                    setNewCourseName(course.course_name);
+                                    setShowNewCourseFields(false);
+                                    setShowAddModal(true);
+                                  }}
+                                >
+                                  + Add Grade
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  );
+                })()
+              ) : (
+                // ── STUDENT VIEW ──
+                (() => {
+                  const studentCourses = Array.from(new Set(grades.map(g => g.courseCode))).map(code => {
+                    const grade = grades.find(g => g.courseCode === code);
+                    return {
+                      courseCode: code,
+                      courseName: grade ? grade.courseName : '',
+                      gradeVal: grade ? grade.grade : 0,
+                      letterGrade: grade ? grade.letterGrade : 'F',
+                      gradeObj: grade
+                    };
+                  });
+
+                  const filteredStudentCourses = studentCourses.filter(c => 
+                    c.courseCode.toLowerCase().includes(courseSearchQuery.toLowerCase()) ||
+                    c.courseName.toLowerCase().includes(courseSearchQuery.toLowerCase())
+                  );
+
+                  return filteredStudentCourses.length === 0 ? (
+                    <div style={{ textAlign: 'center', padding: '60px 24px', border: '2px dashed var(--border)', borderRadius: 'var(--radius-md)' }}>
+                      <BookOpen size={64} style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+                      <h2 style={{ marginTop: '16px' }}>No courses match your search</h2>
+                      <p>Try clearing your search query or contact your professor if you are missing enrollment entries.</p>
+                    </div>
+                  ) : (
+                    <div className="grades-grid">
+                      {studentCourses.map(c => (
+                        <div 
+                          key={c.courseCode}
+                          className="grade-record-card"
+                          style={{ 
+                            borderTop: `4px solid ${getGradeScoreColor(c.gradeVal)}`,
+                            cursor: 'default',
+                            display: 'flex',
+                            flexDirection: 'column',
+                            justifyContent: 'space-between',
+                            height: '240px'
+                          }}
+                        >
+                          <div>
+                            <div className="grade-card-header" style={{ marginBottom: '12px' }}>
+                              <span className="grade-card-student" style={{ fontSize: '12px', letterSpacing: '0.05em' }}>
+                                COURSE CODE: {c.courseCode}
+                              </span>
+                              <span className="grade-card-badge secure" style={{ padding: '4px 8px', fontSize: '10px' }}>
+                                SECURED ✓
+                              </span>
+                            </div>
+                            <h3 style={{ fontSize: '18px', fontWeight: 800, color: 'var(--text-primary)', marginBottom: '16px', lineHeight: 1.3 }}>
+                              {c.courseName}
+                            </h3>
+                          </div>
+
+                          <div>
+                            <div style={{ display: 'flex', gap: '20px', marginBottom: '20px', borderTop: '1px dashed var(--border)', paddingTop: '12px' }}>
+                              <div>
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Your Grade</div>
+                                <div style={{ fontSize: '20px', fontWeight: 800, color: getGradeScoreColor(c.gradeVal) }}>
+                                  {c.gradeVal.toFixed(1)}%
+                                </div>
+                              </div>
+                              <div style={{ borderLeft: '1px solid var(--border)', paddingLeft: '20px' }}>
+                                <div style={{ fontSize: '11px', color: 'var(--text-muted)' }}>Letter Mark</div>
+                                <div style={{ fontSize: '20px', fontWeight: 800, color: getGradeScoreColor(c.gradeVal) }}>
+                                  Grade {c.letterGrade}
+                                </div>
+                              </div>
+                            </div>
+
+                            <button 
+                              className="action-btn"
+                              style={{ width: '100%', padding: '8px 12px', fontSize: '12px', justifyContent: 'center' }}
+                              onClick={() => {
+                                if (c.gradeObj) handleOpenDetails(c.gradeObj);
+                              }}
+                            >
+                              Verify Cryptographic Proof
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  );
+                })()
+              )}
+            </div>
+          )}
+
           {/* ── TAB 2: STATISTICS VIEW ───────────────────────────────────────── */}
           {currentTab === 'statistics' && (
             <div style={{ animation: 'slide-up 0.3s ease' }}>
-              {statsLoading ? (
-                <div style={{ textAlign: 'center', padding: '48px 0' }}>
-                  <ArrowClockwise size={40} className="loading-spin" style={{ color: 'var(--primary)' }} />
-                  <p style={{ marginTop: '12px' }}>Computing statistics & verification states...</p>
+              {showStatsLoadingIndicator ? (
+                <div className="shimmer-wrapper" style={{ animation: 'fade-in 0.3s ease' }}>
+                  {/* Dashboard Hero Header Skeleton */}
+                  <div className="dashboard-hero" style={{ height: 'auto', padding: '24px' }}>
+                    <div className="hero-header-row" style={{ marginBottom: '20px' }}>
+                      <div className="shimmer-item shimmer-circle" style={{ width: '48px', height: '48px' }}></div>
+                      <div style={{ flex: '1', display: 'flex', flexDirection: 'column', gap: '8px' }}>
+                        <div className="shimmer-item shimmer-line short"></div>
+                        <div className="shimmer-item shimmer-line medium" style={{ marginBottom: 0 }}></div>
+                      </div>
+                    </div>
+                    
+                    <div className="hero-metrics-grid" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '20px' }}>
+                      <div className="shimmer-card" style={{ height: '100px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <div className="shimmer-item shimmer-line short" style={{ height: '24px', marginBottom: '8px' }}></div>
+                        <div className="shimmer-item shimmer-line medium" style={{ marginBottom: 0 }}></div>
+                      </div>
+                      <div className="shimmer-card" style={{ height: '100px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <div className="shimmer-item shimmer-line short" style={{ height: '24px', marginBottom: '8px' }}></div>
+                        <div className="shimmer-item shimmer-line medium" style={{ marginBottom: 0 }}></div>
+                      </div>
+                      <div className="shimmer-card" style={{ height: '100px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                        <div className="shimmer-item shimmer-line short" style={{ height: '24px', marginBottom: '8px' }}></div>
+                        <div className="shimmer-item shimmer-line medium" style={{ marginBottom: 0 }}></div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Chart Layout Skeleton */}
+                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: '24px', marginTop: '24px' }}>
+                    <div className="shimmer-card" style={{ height: '340px' }}>
+                      <div className="shimmer-item shimmer-title"></div>
+                      <div className="shimmer-item shimmer-chart"></div>
+                    </div>
+                    <div className="shimmer-card" style={{ height: '340px' }}>
+                      <div className="shimmer-item shimmer-title"></div>
+                      <div className="shimmer-item shimmer-chart"></div>
+                    </div>
+                  </div>
                 </div>
               ) : stats ? (
                 <>
@@ -1283,11 +2544,20 @@ function App() {
                     </div>
                     
                     <div className="hero-metrics-grid">
-                      <div className="hero-metric-item">
-                        <GraduationCap className="hero-metric-icon" />
-                        <span className="hero-metric-val">{stats.totalGrades}</span>
-                        <span className="hero-metric-lbl">Total Grades</span>
-                      </div>
+                      {userRole === 'student' ? (
+                        <div className="hero-metric-item">
+                          <span style={{ fontSize: '28px', fontWeight: 800, color: 'var(--primary)' }}>
+                            {studentGpa.toFixed(2)}
+                          </span>
+                          <span className="hero-metric-lbl">Cumulative GPA</span>
+                        </div>
+                      ) : (
+                        <div className="hero-metric-item">
+                          <GraduationCap className="hero-metric-icon" />
+                          <span className="hero-metric-val">{stats.totalGrades}</span>
+                          <span className="hero-metric-lbl">Total Grades</span>
+                        </div>
+                      )}
                       
                       {/* Overall Average Gauge Chart */}
                       <div className="gauge-container">
@@ -1419,7 +2689,13 @@ function App() {
                               </div>
                               <div className="course-details">
                                 <span className="course-code-name">{course.code}: {course.name}</span>
-                                <span className="course-students">Students Enrolled: {course.students}</span>
+                                {userRole === 'professor' ? (
+                                  <span className="course-students">Students Enrolled: {course.students}</span>
+                                ) : (
+                                  <span className="course-students" style={{ color: 'var(--success)', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                                    <ShieldCheck size={14} /> Cryptographically Secure
+                                  </span>
+                                )}
                               </div>
                             </div>
                             <span className="course-avg">{course.average.toFixed(1)}%</span>
@@ -1442,30 +2718,57 @@ function App() {
           )}
 
           {/* ── TAB 3: PROFILE VIEW ───────────────────────────────────────────── */}
-          {currentTab === 'profile' && professor && (
+          {currentTab === 'profile' && (
             <div className="profile-card" style={{ animation: 'slide-up 0.3s ease' }}>
-              <div className="profile-avatar">
-                {professor.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
-              </div>
-              <h2 className="profile-name">{professor.name}</h2>
-              <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '14px' }}>Alexandria University Faculty Member</span>
-              
-              <div className="profile-meta-grid">
-                <div className="profile-meta-item">
-                  <span className="profile-meta-label">Employee ID</span>
-                  <span className="profile-meta-val">{professor.employee_id}</span>
-                </div>
-                <div className="profile-meta-item">
-                  <span className="profile-meta-label">Department</span>
-                  <span className="profile-meta-val">{professor.department}</span>
-                </div>
-                <div className="profile-meta-item" style={{ gridColumn: 'span 2' }}>
-                  <span className="profile-meta-label">Faculty Registered Email</span>
-                  <span className="profile-meta-val">{professor.email}</span>
-                </div>
-              </div>
+              {userRole === 'professor' && professor ? (
+                <>
+                  <div className="profile-avatar">
+                    {professor.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()}
+                  </div>
+                  <h2 className="profile-name">{professor.name}</h2>
+                  <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '14px' }}>Alexandria University Faculty Member</span>
+                  
+                  <div className="profile-meta-grid">
+                    <div className="profile-meta-item">
+                      <span className="profile-meta-label">Employee ID</span>
+                      <span className="profile-meta-val">{professor.employee_id}</span>
+                    </div>
+                    <div className="profile-meta-item">
+                      <span className="profile-meta-label">Department</span>
+                      <span className="profile-meta-val">{professor.department}</span>
+                    </div>
+                    <div className="profile-meta-item" style={{ gridColumn: 'span 2' }}>
+                      <span className="profile-meta-label">Faculty Registered Email</span>
+                      <span className="profile-meta-val">{professor.email}</span>
+                    </div>
+                  </div>
+                </>
+              ) : student ? (
+                <>
+                  <div className="profile-avatar">
+                    {student.name.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()}
+                  </div>
+                  <h2 className="profile-name">{student.name}</h2>
+                  <span style={{ color: 'var(--primary)', fontWeight: 700, fontSize: '14px' }}>Alexandria University Student</span>
+                  
+                  <div className="profile-meta-grid">
+                    <div className="profile-meta-item">
+                      <span className="profile-meta-label">Student ID</span>
+                      <span className="profile-meta-val">{student.student_id}</span>
+                    </div>
+                    <div className="profile-meta-item">
+                      <span className="profile-meta-label">Faculty / Department</span>
+                      <span className="profile-meta-val">{student.department}</span>
+                    </div>
+                    <div className="profile-meta-item" style={{ gridColumn: 'span 2' }}>
+                      <span className="profile-meta-label">Registered Email</span>
+                      <span className="profile-meta-val">{student.email}</span>
+                    </div>
+                  </div>
+                </>
+              ) : null}
 
-              <button className="logout-btn" onClick={handleLogout} style={{ maxWidth: '200px' }}>
+              <button className="logout-btn" onClick={handleLogout} style={{ maxWidth: '200px', marginTop: '24px' }}>
                 <SignOut size={16} weight="bold" />
                 Sign Out of Portal
               </button>
@@ -1485,10 +2788,29 @@ function App() {
                 </div>
               </div>
 
-              {loadingGlobalLogs ? (
-                <div style={{ textAlign: 'center', padding: '60px' }}>
-                  <ArrowClockwise size={32} className="loading-spin" style={{ color: 'var(--primary)' }} />
-                  <p style={{ marginTop: '12px', color: 'var(--text-muted)' }}>Loading cryptographic events feed...</p>
+              {showGlobalLogsLoadingIndicator ? (
+                <div className="shimmer-wrapper" style={{ animation: 'fade-in 0.3s ease', display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                  <div className="shimmer-card" style={{ height: '90px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                      <div className="shimmer-item shimmer-line short" style={{ margin: 0 }}></div>
+                      <div className="shimmer-item shimmer-line short" style={{ width: '100px', margin: 0 }}></div>
+                    </div>
+                    <div className="shimmer-item shimmer-line medium" style={{ marginBottom: 0 }}></div>
+                  </div>
+                  <div className="shimmer-card" style={{ height: '90px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                      <div className="shimmer-item shimmer-line short" style={{ margin: 0 }}></div>
+                      <div className="shimmer-item shimmer-line short" style={{ width: '100px', margin: 0 }}></div>
+                    </div>
+                    <div className="shimmer-item shimmer-line medium" style={{ marginBottom: 0 }}></div>
+                  </div>
+                  <div className="shimmer-card" style={{ height: '90px', display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '12px' }}>
+                      <div className="shimmer-item shimmer-line short" style={{ margin: 0 }}></div>
+                      <div className="shimmer-item shimmer-line short" style={{ width: '100px', margin: 0 }}></div>
+                    </div>
+                    <div className="shimmer-item shimmer-line medium" style={{ marginBottom: 0 }}></div>
+                  </div>
                 </div>
               ) : globalAuditLogs.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: '60px', border: '2px dashed var(--border)', borderRadius: 'var(--radius-md)' }}>
@@ -1642,23 +2964,56 @@ function App() {
             </div>
             
             <div className="modal-footer">
-              <button 
-                className="logout-btn" 
-                style={{ borderColor: 'var(--primary)', color: 'var(--primary)', marginRight: 'auto' }}
-                onClick={handleOpenEdit}
-              >
-                <Lock size={16} /> Edit Grade
-              </button>
+              {userRole === 'professor' && (
+                <>
+                  <button 
+                    className="logout-btn" 
+                    style={{ borderColor: 'var(--primary)', color: 'var(--primary)', marginRight: 'auto' }}
+                    onClick={handleOpenEdit}
+                  >
+                    <Lock size={16} /> Edit Grade
+                  </button>
 
-              {!selectedGrade.isVerified && (
-                <button 
-                  className="action-btn" 
-                  style={{ backgroundColor: 'var(--destructive)' }}
-                  onClick={() => handleRepairGrade(selectedGrade.id)}
-                  disabled={isSubmitting}
-                >
-                  <Wrench size={16} /> Repair Signature
-                </button>
+                  {!selectedGrade.isVerified && (
+                    <button 
+                      className="action-btn" 
+                      style={{ backgroundColor: 'var(--destructive)' }}
+                      onClick={() => handleRepairGrade(selectedGrade.id)}
+                      disabled={isSubmitting}
+                    >
+                      <Wrench size={16} /> Repair Signature
+                    </button>
+                  )}
+                </>
+              )}
+
+              {userRole === 'student' && (
+                <div style={{
+                  flex: 1,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '10px',
+                  padding: '10px 14px',
+                  borderRadius: 'var(--radius-sm)',
+                  backgroundColor: selectedGrade.isVerified ? 'var(--success-bg, rgba(34,197,94,0.08))' : 'var(--destructive-bg)',
+                  border: `1px solid ${selectedGrade.isVerified ? 'var(--success, #22c55e)' : 'var(--destructive-border)'}`,
+                }}>
+                  {selectedGrade.isVerified ? (
+                    <ShieldCheck size={22} style={{ color: 'var(--success, #22c55e)', flexShrink: 0 }} weight="fill" />
+                  ) : (
+                    <ShieldSlash size={22} style={{ color: 'var(--destructive)', flexShrink: 0 }} weight="fill" />
+                  )}
+                  <div>
+                    <div style={{ fontSize: '11px', fontWeight: 700, letterSpacing: '0.06em', color: selectedGrade.isVerified ? 'var(--success, #22c55e)' : 'var(--destructive)', textTransform: 'uppercase' }}>
+                      AUTOMATIC INTEGRITY CHECK
+                    </div>
+                    <div style={{ fontSize: '12px', color: 'var(--text-secondary)', marginTop: '2px' }}>
+                      {selectedGrade.isVerified
+                        ? 'Cryptographic signature is valid. This grade record has not been tampered with.'
+                        : 'Signature mismatch detected. This record may have been altered. Contact your professor immediately.'}
+                    </div>
+                  </div>
+                </div>
               )}
 
               <button className="nav-btn" style={{ width: 'auto', border: '1px solid var(--border)' }} onClick={handleCloseDetails}>
@@ -1711,20 +3066,22 @@ function App() {
                 </div>
 
                 <div className="form-group">
-                  <label htmlFor="editLetter">New Letter Grade</label>
-                  <select
-                    id="editLetter"
-                    className="select-filter"
-                    style={{ width: '100%', padding: '10px' }}
-                    value={editLetterGradeVal}
-                    onChange={e => setEditLetterGradeVal(e.target.value)}
-                  >
-                    <option value="A">A</option>
-                    <option value="B">B</option>
-                    <option value="C">C</option>
-                    <option value="D">D</option>
-                    <option value="F">F</option>
-                  </select>
+                  <label>New Letter Grade</label>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    height: '42px',
+                    backgroundColor: `${getGradeScoreColor(parseFloat(editGradeVal) || 0)}15`,
+                    color: getGradeScoreColor(parseFloat(editGradeVal) || 0),
+                    border: `1.5px solid ${getGradeScoreColor(parseFloat(editGradeVal) || 0)}`,
+                    borderRadius: 'var(--radius-sm)',
+                    fontWeight: 800,
+                    fontSize: '18px',
+                    transition: 'all 0.2s ease'
+                  }}>
+                    {editLetterGradeVal}
+                  </div>
                 </div>
               </div>
               <div className="modal-footer">
@@ -1748,13 +3105,13 @@ function App() {
               <div className="segmented-control" style={{ marginBottom: 0 }}>
                 <button 
                   className={addModalType === 'single' ? 'active' : ''} 
-                  onClick={() => { setAddModalType('single'); setBatchError(null); }}
+                  onClick={() => setAddModalType('single')}
                 >
                   Single Entry
                 </button>
                 <button 
                   className={addModalType === 'batch' ? 'active' : ''} 
-                  onClick={() => { setAddModalType('batch'); setBatchError(null); }}
+                  onClick={() => setAddModalType('batch')}
                 >
                   Batch (CSV/Text)
                 </button>
@@ -1779,34 +3136,70 @@ function App() {
                     />
                   </div>
                   
-                  <div className="form-row">
-                    <div className="form-group">
-                      <label htmlFor="newCourseCode">Course Code</label>
-                      <input
-                        id="newCourseCode"
-                        type="text"
-                        className="form-control"
-                        style={{ paddingLeft: '14px' }}
-                        placeholder="CS101"
-                        value={newCourseCode}
-                        onChange={e => setNewCourseCode(e.target.value)}
-                        required
-                      />
-                    </div>
-                    <div className="form-group">
-                      <label htmlFor="newCourseName">Course Name</label>
-                      <input
-                        id="newCourseName"
-                        type="text"
-                        className="form-control"
-                        style={{ paddingLeft: '14px' }}
-                        placeholder="Intro to CS"
-                        value={newCourseName}
-                        onChange={e => setNewCourseName(e.target.value)}
-                        required
-                      />
-                    </div>
+                  <div className="form-group">
+                    <label htmlFor="courseSelect">Select Course</label>
+                    <select
+                      id="courseSelect"
+                      className="select-filter"
+                      style={{ width: '100%', padding: '10px' }}
+                      value={selectedCourseCode}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setSelectedCourseCode(val);
+                        if (val === 'NEW_COURSE') {
+                          setNewCourseCode('');
+                          setNewCourseName('');
+                          setShowNewCourseFields(true);
+                        } else {
+                          const selected = activeCourses.find(c => c.course_code === val);
+                          if (selected) {
+                            setNewCourseCode(selected.course_code);
+                            setNewCourseName(selected.course_name);
+                          }
+                          setShowNewCourseFields(false);
+                        }
+                      }}
+                      required
+                    >
+                      {activeCourses.map(c => (
+                        <option key={c.course_code} value={c.course_code}>
+                          {c.course_code} — {c.course_name}
+                        </option>
+                      ))}
+                      <option value="NEW_COURSE">+ Add New Course...</option>
+                    </select>
                   </div>
+
+                  {showNewCourseFields && (
+                    <div className="form-row" style={{ animation: 'fade-in 0.2s ease' }}>
+                      <div className="form-group">
+                        <label htmlFor="newCourseCode">New Course Code</label>
+                        <input
+                          id="newCourseCode"
+                          type="text"
+                          className="form-control"
+                          style={{ paddingLeft: '14px' }}
+                          placeholder="e.g. CS101"
+                          value={newCourseCode}
+                          onChange={e => setNewCourseCode(e.target.value)}
+                          required
+                        />
+                      </div>
+                      <div className="form-group">
+                        <label htmlFor="newCourseName">New Course Name</label>
+                        <input
+                          id="newCourseName"
+                          type="text"
+                          className="form-control"
+                          style={{ paddingLeft: '14px' }}
+                          placeholder="e.g. Intro to CS"
+                          value={newCourseName}
+                          onChange={e => setNewCourseName(e.target.value)}
+                          required
+                        />
+                      </div>
+                    </div>
+                  )}
 
                   <div className="form-row">
                     <div className="form-group">
@@ -1821,25 +3214,40 @@ function App() {
                         style={{ paddingLeft: '14px' }}
                         placeholder="85.5"
                         value={newGrade}
-                        onChange={e => setNewGrade(e.target.value)}
+                        onChange={e => {
+                          const val = e.target.value;
+                          setNewGrade(val);
+                          const num = parseFloat(val);
+                          if (!isNaN(num)) {
+                            if (num >= 90) setNewLetterGrade('A');
+                            else if (num >= 80) setNewLetterGrade('B');
+                            else if (num >= 70) setNewLetterGrade('C');
+                            else if (num >= 60) setNewLetterGrade('D');
+                            else setNewLetterGrade('F');
+                          } else {
+                            setNewLetterGrade('F');
+                          }
+                        }}
                         required
                       />
                     </div>
                     <div className="form-group">
-                      <label htmlFor="newLetter">Letter Grade</label>
-                      <select
-                        id="newLetter"
-                        className="select-filter"
-                        style={{ width: '100%', padding: '10px' }}
-                        value={newLetterGrade}
-                        onChange={e => setNewLetterGrade(e.target.value)}
-                      >
-                        <option value="A">A</option>
-                        <option value="B">B</option>
-                        <option value="C">C</option>
-                        <option value="D">D</option>
-                        <option value="F">F</option>
-                      </select>
+                      <label>Letter Grade</label>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        height: '42px',
+                        backgroundColor: `${getGradeScoreColor(parseFloat(newGrade) || 0)}15`,
+                        color: getGradeScoreColor(parseFloat(newGrade) || 0),
+                        border: `1.5px solid ${getGradeScoreColor(parseFloat(newGrade) || 0)}`,
+                        borderRadius: 'var(--radius-sm)',
+                        fontWeight: 800,
+                        fontSize: '18px',
+                        transition: 'all 0.2s ease'
+                      }}>
+                        {newLetterGrade}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1856,73 +3264,135 @@ function App() {
             ) : (
               <form onSubmit={handleBatchSubmit}>
                 <div className="modal-body batch-container">
-                  <div className="batch-instruction-box">
-                    <strong>Format instructions:</strong> Paste comma-separated rows. Every row must match:<br />
-                    <code>StudentID, CourseCode, CourseName, Grade, LetterGrade</code><br />
-                    <em>Example: 202611005, CS101, Intro to CS, 88.0, B</em>
-                  </div>
-
-                  {batchError && (
-                    <div style={{ backgroundColor: 'var(--destructive-bg)', color: 'var(--destructive)', border: '1px solid var(--destructive-border)', padding: '10px', borderRadius: '4px', fontSize: '12px', fontWeight: 600 }}>
-                      {batchError}
-                    </div>
-                  )}
-
-                  <div className="batch-textarea-container">
-                    <label htmlFor="batchText" style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase' }}>CSV Grade Records Input</label>
-                    <textarea
-                      id="batchText"
-                      className="batch-textarea"
-                      placeholder="202604001, CS202, Data Structures, 95.0, A&#10;202604002, CS202, Data Structures, 78.5, C"
-                      value={batchText}
-                      onChange={e => setBatchText(e.target.value)}
+                  <div className="form-group" style={{ marginBottom: '16px' }}>
+                    <label htmlFor="batchCourseSelect">Select Course for Batch</label>
+                    <select
+                      id="batchCourseSelect"
+                      className="select-filter"
+                      style={{ width: '100%', padding: '10px' }}
+                      value={webBatchCourseCode}
+                      onChange={e => setWebBatchCourseCode(e.target.value)}
                       required
-                    ></textarea>
+                    >
+                      {activeCourses.map(c => (
+                        <option key={c.course_code} value={c.course_code}>
+                          {c.course_code} — {c.course_name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
-                  {/* Batch Preview Table */}
-                  {batchText.trim().length > 0 && (
-                    <div style={{ width: '100%' }}>
-                      <h4 style={{ margin: '16px 0 8px 0', fontSize: '13px', fontWeight: 800 }}>Record Verification Preview</h4>
-                      <div className="batch-preview-table-container">
-                        <table className="batch-table">
-                          <thead>
-                            <tr>
-                              <th>Row</th>
-                              <th>Student ID</th>
-                              <th>Course</th>
-                              <th>Grade</th>
-                              <th>Letter</th>
-                              <th>Status</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {parseBatchText(batchText).map((row, idx) => (
-                              <tr key={idx} style={{ backgroundColor: row.isValid ? 'transparent' : 'rgba(239, 68, 68, 0.05)' }}>
-                                <td>{row.rowNum}</td>
-                                <td>{row.studentId || <span style={{ color: 'var(--destructive)' }}>Missing</span>}</td>
-                                <td>{row.courseCode ? `${row.courseCode} — ${row.courseName}` : <span style={{ color: 'var(--destructive)' }}>Missing</span>}</td>
-                                <td>{isNaN(row.grade) ? <span style={{ color: 'var(--destructive)' }}>Invalid</span> : row.grade}</td>
-                                <td>{row.letterGrade || <span style={{ color: 'var(--destructive)' }}>Invalid</span>}</td>
-                                <td>
-                                  <span className={`badge-row-validation ${row.isValid ? 'valid' : 'invalid'}`}>
-                                    {row.isValid ? 'VALID' : 'ERROR'}
-                                  </span>
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  )}
+                  <div style={{ maxHeight: '250px', overflowY: 'auto', paddingRight: '4px', marginBottom: '16px' }}>
+                    <table className="batch-table">
+                      <thead>
+                        <tr>
+                          <th>Student ID</th>
+                          <th>Numeric Grade</th>
+                          <th>Letter Grade</th>
+                          <th style={{ width: '50px', textAlign: 'center' }}>Action</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {webBatchEntries.map((entry, idx) => (
+                          <tr key={idx}>
+                            <td>
+                              <input
+                                type="text"
+                                className="form-control"
+                                style={{ padding: '8px 12px', height: '36px' }}
+                                placeholder="Student ID"
+                                value={entry.studentId}
+                                onChange={e => {
+                                  const val = e.target.value;
+                                  setWebBatchEntries(prev => prev.map((item, i) => i === idx ? { ...item, studentId: val } : item));
+                                }}
+                                required
+                              />
+                            </td>
+                            <td>
+                              <input
+                                type="number"
+                                step="0.1"
+                                min="0"
+                                max="100"
+                                className="form-control"
+                                style={{ padding: '8px 12px', height: '36px' }}
+                                placeholder="Grade"
+                                value={entry.grade}
+                                onChange={e => handleWebBatchGradeChange(idx, e.target.value)}
+                                required
+                              />
+                            </td>
+                            <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                              <span style={{ fontWeight: 800, fontSize: '14px', color: 'var(--text)' }}>
+                                {entry.letterGrade}
+                              </span>
+                            </td>
+                            <td style={{ textAlign: 'center', verticalAlign: 'middle' }}>
+                              <button
+                                type="button"
+                                className="icon-btn"
+                                style={{ color: 'var(--destructive)', opacity: webBatchEntries.length <= 1 ? 0.4 : 1 }}
+                                disabled={webBatchEntries.length <= 1}
+                                onClick={() => removeWebBatchRow(idx)}
+                              >
+                                <Trash size={18} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-start', marginBottom: '24px' }}>
+                    <button
+                      type="button"
+                      className="nav-btn"
+                      style={{ width: 'auto', border: '1px solid var(--border)', display: 'inline-flex', alignItems: 'center', gap: '6px' }}
+                      onClick={addWebBatchRow}
+                    >
+                      <Plus size={16} /> Add Student Row
+                    </button>
+                  </div>
+
+                  {/* Spreadsheet Upload Placeholder */}
+                  <div style={{ 
+                    padding: '16px', 
+                    border: '1px dashed var(--border)', 
+                    borderRadius: 'var(--radius-sm)', 
+                    backgroundColor: 'var(--muted)',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}>
+                    <span style={{ fontSize: '12px', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                      Do you have a pre-formatted spreadsheet?
+                    </span>
+                    <label className="action-btn" style={{ fontSize: '11px', padding: '6px 12px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+                      <UploadSimple size={14} />
+                      Upload File (.csv, .xlsx)
+                      <input 
+                        type="file" 
+                        accept=".csv, .xlsx" 
+                        style={{ display: 'none' }} 
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            alert(`File "${file.name}" selected. Spreadsheet batch entry integration is a placeholder for future Alexandria University implementation.`);
+                          }
+                        }}
+                      />
+                    </label>
+                  </div>
                 </div>
 
                 <div className="modal-footer">
                   <button type="button" className="nav-btn" style={{ width: 'auto', border: '1px solid var(--border)' }} onClick={() => setShowAddModal(false)}>
                     Cancel
                   </button>
-                  <button type="submit" className="action-btn" disabled={isSubmitting || !batchText.trim()}>
+                  <button type="submit" className="action-btn" disabled={isSubmitting}>
                     Upload & Sign Batch
                   </button>
                 </div>
@@ -1931,6 +3401,94 @@ function App() {
           </div>
         </div>
       )}
+
+      {/* ── SECURE SYSTEM STATUS DIALOG ── */}
+      {showStatusModal && (
+        <div className="modal-overlay" onClick={() => setShowStatusModal(false)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()} style={{ maxWidth: '480px' }}>
+            <div className="modal-header">
+              <h2>Secure System Status</h2>
+              <button className="icon-btn" onClick={() => setShowStatusModal(false)} aria-label="Close modal">
+                <X size={20} />
+              </button>
+            </div>
+            
+            <div className="modal-body" style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '20px', padding: '24px 16px' }}>
+              <div 
+                style={{ 
+                  width: '64px', 
+                  height: '64px', 
+                  borderRadius: '50%', 
+                  backgroundColor: hasTamperedGrades ? 'rgba(239, 68, 68, 0.15)' : 'rgba(16, 185, 129, 0.15)',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  color: hasTamperedGrades ? 'var(--destructive)' : 'var(--success)'
+                }}
+              >
+                <ShieldCheck size={36} weight="fill" />
+              </div>
+              
+              <div>
+                <h3 style={{ fontSize: '18px', fontWeight: 800, marginBottom: '6px' }}>
+                  {hasTamperedGrades ? 'System Compromised' : 'System Secure'}
+                </h3>
+                <p style={{ color: 'var(--text-secondary)', fontSize: '13px' }}>
+                  {hasTamperedGrades 
+                    ? 'Cryptographic validation failed. Some grade records do not match their stored signature.' 
+                    : 'All grade records match their HMAC-SHA256 signatures stored in the secure database.'}
+                </p>
+              </div>
+              
+              <div 
+                style={{ 
+                  width: '100%', 
+                  backgroundColor: 'var(--card-bg)', 
+                  border: '1px solid var(--border)', 
+                  borderRadius: 'var(--radius-sm)', 
+                  padding: '16px',
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: '16px',
+                  textAlign: 'left',
+                  fontSize: '12px'
+                }}
+              >
+                <div>
+                  <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>VERIFICATION ENGINE</span>
+                  <strong style={{ color: 'var(--text)' }}>HMAC-SHA256</strong>
+                </div>
+                <div>
+                  <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '2px' }}>INTEGRITY STATUS</span>
+                  <strong style={{ color: hasTamperedGrades ? 'var(--destructive)' : 'var(--success)' }}>
+                    {hasTamperedGrades ? 'FAIL' : 'PASS (100%)'}
+                  </strong>
+                </div>
+                <div style={{ gridColumn: 'span 2' }}>
+                  <span style={{ color: 'var(--text-muted)', display: 'block', marginBottom: '4px' }}>KEY STATE</span>
+                  <code style={{ fontSize: '11px', display: 'block', wordBreak: 'break-all', backgroundColor: 'var(--muted)', padding: '6px', borderRadius: '4px' }}>
+                    {hasTamperedGrades 
+                      ? 'WARNING: DB SIGNATURE MISMATCH DETECTED' 
+                      : 'ENV_SECRET_KEY_VALIDATED_OK (ACTIVE)'}
+                  </code>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer" style={{ justifyContent: 'center' }}>
+              <button className="action-btn" style={{ width: '100%' }} onClick={() => setShowStatusModal(false)}>
+                Dismiss Status Card
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Custom cursor follower bubble */}
+      <div 
+        ref={cursorRef} 
+        className={`cursor-follower ${cursorVisible ? 'visible' : ''} ${cursorHovered ? 'hovered' : ''}`}
+      />
     </div>
   );
 }

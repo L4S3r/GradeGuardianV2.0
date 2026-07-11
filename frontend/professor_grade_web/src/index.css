@@ -7,7 +7,7 @@
   --accent: #d97706;
   --background: #f0fdfa;
   --foreground: #134e4a;
-  --card-bg: #ffffff;
+  --card-bg: rgba(255, 255, 255, 0.85);
   --muted: #e8f1f4;
   --border: #5eead4;
   --destructive: #dc2626;
@@ -47,7 +47,7 @@
   --accent: #f59e0b;
   --background: #080f0e;
   --foreground: #f0fdfa;
-  --card-bg: #101c1a;
+  --card-bg: rgba(16, 28, 26, 0.85);
   --muted: #182a27;
   --border: #1c3d39;
   --destructive: #ef4444;
@@ -77,12 +77,72 @@ body {
   margin: 0;
   padding: 0;
   font-family: var(--font-sans);
-  background-color: var(--background);
   color: var(--text-primary);
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  background-color: var(--background);
   transition: background-color 0.3s ease, color 0.3s ease;
+  overflow-x: hidden;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: -2;
+  background-image: 
+    radial-gradient(rgba(13, 148, 136, 0.35) 1.8px, transparent 1.8px);
+  background-size: 32px 32px;
+  pointer-events: none;
+}
+
+[data-theme="dark"] body::before {
+  background-image: 
+    radial-gradient(rgba(45, 212, 191, 0.22) 1.5px, transparent 1.5px);
+}
+
+body::after {
+  content: "";
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: -1;
+  opacity: 0.38;
+  background-image: 
+    radial-gradient(circle at 15% 25%, var(--secondary) 0%, transparent 45%),
+    radial-gradient(circle at 85% 75%, var(--primary) 0%, transparent 50%),
+    radial-gradient(circle at 50% 15%, rgba(217, 119, 6, 0.4) 0%, transparent 35%),
+    radial-gradient(circle at 75% 20%, rgba(99, 102, 241, 0.3) 0%, transparent 40%);
+  filter: blur(80px);
+  animation: moveBlob 25s infinite alternate ease-in-out;
+  pointer-events: none;
+}
+
+[data-theme="dark"] body::after {
+  opacity: 0.22;
+  background-image: 
+    radial-gradient(circle at 15% 25%, var(--secondary) 0%, transparent 45%),
+    radial-gradient(circle at 85% 75%, var(--primary) 0%, transparent 50%),
+    radial-gradient(circle at 50% 15%, rgba(245, 158, 11, 0.25) 0%, transparent 35%),
+    radial-gradient(circle at 75% 20%, rgba(129, 140, 248, 0.2) 0%, transparent 40%);
+}
+
+@keyframes moveBlob {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(4%, 6%) scale(1.08) rotate(3deg);
+  }
+  100% {
+    transform: translate(-3%, -4%) scale(0.92) rotate(-3deg);
+  }
 }
 
 #root {

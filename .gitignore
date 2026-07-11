@@ -35,6 +35,12 @@ frontend/professor_grade_app/.packages
 frontend/professor_grade_app/build/
 frontend/professor_grade_app/pubspec.lock
 frontend/professor_grade_app/*.iml
+frontend/professor_grade_app/android
+frontend/professor_grade_app/ios
+frontend/professor_grade_app/macos
+frontend/professor_grade_app/web
+frontend/professor_grade_app/linux
+frontend/professor_grade_app/windows
 
 # Platform-specific build artifacts
 frontend/professor_grade_app/ios/Pods/
@@ -48,3 +54,6 @@ stitch_mobile_to_web_parity.zip
 stitch_mobile_to_web_parity/screen.png
 stitch_mobile_to_web_parity/code.html
 Ingest.md
+.agents
+graphify-out/
+backend/scripts/

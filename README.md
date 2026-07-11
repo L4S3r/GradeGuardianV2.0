@@ -125,6 +125,15 @@ Two separate HMAC keys are maintained for defense-in-depth:
 * 📜 **Grade Audit Trail** — Chronological history of all integrity checks.
 * 📦 **Batch Verification** — Server-side verification across all courses at once.
 
+### 🎨 Premium UI/UX & Interactive Design
+
+The Professor Web Portal has been overhauled with premium interaction and design patterns:
+* 🫧 **Desktop Cursor Follower** — A custom, transparent tracking bubble with fluid damping/inertia animation that follows the mouse. Hovering over buttons, cards, or inputs dynamically expands the bubble with a theme-aware glow. Disabled on touch-first pointers.
+* 🛡️ **Inline Validation System** — Complete custom field validation on blur (`onBlur`) for the registration forms. Warnings appear directly below the erroneous fields and clear dynamically on input (`onChange`), preventing native browser tooltip clutter.
+* ⚡ **Optimistic UI Engine** — Creating or updating grades updates the lists instantly with a placeholder SHA256 computing status while syncing with the server in the background, rolling back automatically if the API call fails.
+* ⏳ **Flicker-Free Skeletons** — A 300ms loading state delay avoids layout flicker on fast connections. If the request takes longer, content-specific shimmer skeletons display for statistics, courses, and security logs.
+* 🖥️ **Custom Security Card** — Replaced native browser alerts with a custom status modal centered on the screen displaying verification stages, keys verification status, and environment variables validity.
+
 ---
 
 ## 🚀 Local Development Setup
