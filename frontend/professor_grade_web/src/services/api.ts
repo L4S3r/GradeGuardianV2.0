@@ -36,7 +36,12 @@ export interface CourseStat {
   name: string;
   average: number;
   students: number;
+  min?: number;
+  max?: number;
+  median?: number;
+  passRate?: number;
 }
+
 
 export interface ProfessorStats {
   totalGrades: number;
@@ -168,6 +173,13 @@ export class ApiService {
     return this.apiCall<any[]>('/grades/batch', {
       method: 'POST',
       body: JSON.stringify({ grades })
+    });
+  }
+
+  public async parsePdf(fileData: string): Promise<{ course_name: string | null; students: Array<{ student_id: string; student_name: string; grade: number }> }> {
+    return this.apiCall<{ course_name: string | null; students: Array<{ student_id: string; student_name: string; grade: number }> }>('/grades/parse-pdf', {
+      method: 'POST',
+      body: JSON.stringify({ fileData })
     });
   }
 

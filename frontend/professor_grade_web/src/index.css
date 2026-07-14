@@ -7,7 +7,8 @@
   --accent: #d97706;
   --background: #f0fdfa;
   --foreground: #134e4a;
-  --card-bg: rgba(255, 255, 255, 0.85);
+  --card-bg: rgba(255, 255, 255, 0.65);
+  --card-border: rgba(255, 255, 255, 0.45);
   --muted: #e8f1f4;
   --border: #5eead4;
   --destructive: #dc2626;
@@ -47,7 +48,8 @@
   --accent: #f59e0b;
   --background: #080f0e;
   --foreground: #f0fdfa;
-  --card-bg: rgba(16, 28, 26, 0.85);
+  --card-bg: rgba(16, 28, 26, 0.65);
+  --card-border: rgba(255, 255, 255, 0.08);
   --muted: #182a27;
   --border: #1c3d39;
   --destructive: #ef4444;
@@ -94,24 +96,22 @@ body::before {
   right: 0;
   bottom: 0;
   z-index: -2;
-  background-image: 
-    radial-gradient(rgba(13, 148, 136, 0.35) 1.8px, transparent 1.8px);
-  background-size: 32px 32px;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><circle cx='16' cy='16' r='1.8' fill='%230d9488' fill-opacity='0.35'><animate attributeName='r' values='1.0;2.8;1.0' dur='5s' repeatCount='indefinite' begin='0s'/><animate attributeName='fill-opacity' values='0.15;0.55;0.15' dur='5s' repeatCount='indefinite' begin='0s'/></circle><circle cx='48' cy='16' r='1.8' fill='%230d9488' fill-opacity='0.35'><animate attributeName='r' values='1.0;2.8;1.0' dur='5s' repeatCount='indefinite' begin='1.25s'/><animate attributeName='fill-opacity' values='0.15;0.55;0.15' dur='5s' repeatCount='indefinite' begin='1.25s'/></circle><circle cx='16' cy='48' r='1.8' fill='%230d9488' fill-opacity='0.35'><animate attributeName='r' values='1.0;2.8;1.0' dur='5s' repeatCount='indefinite' begin='2.5s'/><animate attributeName='fill-opacity' values='0.15;0.55;0.15' dur='5s' repeatCount='indefinite' begin='2.5s'/></circle><circle cx='48' cy='48' r='1.8' fill='%230d9488' fill-opacity='0.35'><animate attributeName='r' values='1.0;2.8;1.0' dur='5s' repeatCount='indefinite' begin='3.75s'/><animate attributeName='fill-opacity' values='0.15;0.55;0.15' dur='5s' repeatCount='indefinite' begin='3.75s'/></circle></svg>");
+  background-size: 64px 64px;
   pointer-events: none;
 }
 
 [data-theme="dark"] body::before {
-  background-image: 
-    radial-gradient(rgba(45, 212, 191, 0.22) 1.5px, transparent 1.5px);
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='64' height='64'><circle cx='16' cy='16' r='1.8' fill='%232dd4bf' fill-opacity='0.22'><animate attributeName='r' values='1.0;2.8;1.0' dur='5s' repeatCount='indefinite' begin='0s'/><animate attributeName='fill-opacity' values='0.10;0.40;0.10' dur='5s' repeatCount='indefinite' begin='0s'/></circle><circle cx='48' cy='16' r='1.8' fill='%232dd4bf' fill-opacity='0.22'><animate attributeName='r' values='1.0;2.8;1.0' dur='5s' repeatCount='indefinite' begin='1.25s'/><animate attributeName='fill-opacity' values='0.10;0.40;0.10' dur='5s' repeatCount='indefinite' begin='1.25s'/></circle><circle cx='16' cy='48' r='1.8' fill='%232dd4bf' fill-opacity='0.22'><animate attributeName='r' values='1.0;2.8;1.0' dur='5s' repeatCount='indefinite' begin='2.5s'/><animate attributeName='fill-opacity' values='0.10;0.40;0.10' dur='5s' repeatCount='indefinite' begin='2.5s'/></circle><circle cx='48' cy='48' r='1.8' fill='%232dd4bf' fill-opacity='0.22'><animate attributeName='r' values='1.0;2.8;1.0' dur='5s' repeatCount='indefinite' begin='3.75s'/><animate attributeName='fill-opacity' values='0.10;0.40;0.10' dur='5s' repeatCount='indefinite' begin='3.75s'/></circle></svg>");
 }
 
 body::after {
   content: "";
   position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  top: -40px;
+  left: -40px;
+  right: -40px;
+  bottom: -40px;
   z-index: -1;
   opacity: 0.38;
   background-image: 
@@ -120,7 +120,7 @@ body::after {
     radial-gradient(circle at 50% 15%, rgba(217, 119, 6, 0.4) 0%, transparent 35%),
     radial-gradient(circle at 75% 20%, rgba(99, 102, 241, 0.3) 0%, transparent 40%);
   filter: blur(80px);
-  animation: moveBlob 25s infinite alternate ease-in-out;
+  animation: moveBlob 20s infinite ease-in-out alternate;
   pointer-events: none;
 }
 
@@ -135,13 +135,29 @@ body::after {
 
 @keyframes moveBlob {
   0% {
-    transform: translate(0, 0) scale(1);
+    transform: translate(0, 0) scale(1) rotate(0deg);
+    filter: blur(80px) hue-rotate(0deg) saturate(1);
   }
-  50% {
-    transform: translate(4%, 6%) scale(1.08) rotate(3deg);
+  33% {
+    transform: translate(3%, 4%) scale(1.08) rotate(2deg);
+    filter: blur(90px) hue-rotate(10deg) saturate(1.1);
+  }
+  66% {
+    transform: translate(-2%, 2%) scale(0.94) rotate(-2deg);
+    filter: blur(72px) hue-rotate(-10deg) saturate(0.9);
   }
   100% {
-    transform: translate(-3%, -4%) scale(0.92) rotate(-3deg);
+    transform: translate(1%, -2%) scale(1.03) rotate(1deg);
+    filter: blur(82px) hue-rotate(5deg) saturate(1.05);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  body::before {
+    animation: none !important;
+  }
+  body::after {
+    animation: none !important;
   }
 }
 

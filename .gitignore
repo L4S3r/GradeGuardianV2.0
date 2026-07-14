@@ -19,6 +19,7 @@ backend/secret_salt.txt
 backend/faculty_key.txt
 backend/*key.txt
 backend/.env
+backend/.env.local
 
 # Local databases (kept in case SQLite is used in dev)
 backend/*.db
@@ -57,3 +58,5 @@ Ingest.md
 .agents
 graphify-out/
 backend/scripts/
+backend/server.js.bak
+frontend/professor_grade_web/src/App.tsx.bak
