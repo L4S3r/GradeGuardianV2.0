@@ -18,8 +18,10 @@ backend/build/
 backend/secret_salt.txt
 backend/faculty_key.txt
 backend/*key.txt
-backend/.env
-backend/.env.local
+backend/.env*
+frontend/professor_grade_web/.env*
+!.env.example
+!**/.env.example
 
 # Local databases (kept in case SQLite is used in dev)
 backend/*.db
