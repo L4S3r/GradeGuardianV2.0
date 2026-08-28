@@ -11,8 +11,8 @@ require('dotenv').config({ path: path.join(__dirname, '.env') });
 
 
 const express = require('express');
-const cors    = require('cors');
-const helmet  = require('helmet');
+const cors = require('cors');
+const helmet = require('helmet');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Config / Infrastructure
@@ -27,14 +27,14 @@ const { globalLimiter } = require('./middleware/rateLimiter');
 // ─────────────────────────────────────────────────────────────────────────────
 // Routes
 // ─────────────────────────────────────────────────────────────────────────────
-const healthRouter     = require('./routes/health');
-const authRouter       = require('./routes/auth');
-const gradesRouter     = require('./routes/grades');
-const studentsRouter   = require('./routes/students');
-const coursesRouter    = require('./routes/courses');
-const auditLogsRouter  = require('./routes/auditLogs');
+const healthRouter = require('./routes/health');
+const authRouter = require('./routes/auth');
+const gradesRouter = require('./routes/grades');
+const studentsRouter = require('./routes/students');
+const coursesRouter = require('./routes/courses');
+const auditLogsRouter = require('./routes/auditLogs');
 const statisticsRouter = require('./routes/statistics');
-const adminRouter      = require('./routes/admin');
+const adminRouter = require('./routes/admin');
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 3.  EXPRESS APP & MIDDLEWARE
@@ -45,7 +45,7 @@ const app = express();
 app.set('trust proxy', 1);
 
 // CORS — dynamic origin validator supporting local development and deployed domains
-const rawOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:5173,http://localhost:8000';
+const rawOrigins = process.env.ALLOWED_ORIGINS;
 
 const isOriginAllowed = (origin, callback) => {
   if (!origin) return callback(null, true);
