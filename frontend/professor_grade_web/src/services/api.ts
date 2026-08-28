@@ -68,6 +68,10 @@ export class ApiService {
     this.token = token;
   }
 
+  public getBaseUrl(): string {
+    return this.baseUrl;
+  }
+
   public setBaseUrl(url: string) {
     this.baseUrl = this.normalizeUrl(url);
   }

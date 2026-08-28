@@ -22,6 +22,7 @@ import GradeDetailsModal from './components/modals/GradeDetailsModal';
 import EditGradeModal from './components/modals/EditGradeModal';
 import AddGradeModal from './components/modals/AddGradeModal';
 import StatusModal from './components/modals/StatusModal';
+import ApiDebugger from './components/debug/ApiDebugger';
 
 // Tabs
 import GradesTab from './components/tabs/GradesTab';
@@ -144,58 +145,61 @@ function App() {
 
   if (!auth.isAuthenticated) {
     return (
-      <AuthScreen
-        theme={theme}
-        setTheme={setTheme}
-        authPortalMode={auth.authPortalMode}
-        setAuthPortalMode={auth.setAuthPortalMode}
-        formMode={auth.formMode}
-        setFormMode={auth.setFormMode}
-        authError={auth.authError}
-        registerErrors={auth.registerErrors}
-        isSubmitting={auth.isSubmitting}
-        loginEmail={auth.loginEmail}
-        setLoginEmail={auth.setLoginEmail}
-        loginPassword={auth.loginPassword}
-        setLoginPassword={auth.setLoginPassword}
-        loginStudentId={auth.loginStudentId}
-        setLoginStudentId={auth.setLoginStudentId}
-        showLoginPassword={auth.showLoginPassword}
-        setShowLoginPassword={auth.setShowLoginPassword}
-        regName={auth.regName}
-        setRegName={auth.setRegName}
-        regEmpId={auth.regEmpId}
-        setRegEmpId={auth.setRegEmpId}
-        regDept={auth.regDept}
-        setRegDept={auth.setRegDept}
-        regEmail={auth.regEmail}
-        setRegEmail={auth.setRegEmail}
-        regPassword={auth.regPassword}
-        setRegPassword={auth.setRegPassword}
-        regSecretKey={auth.regSecretKey}
-        setRegSecretKey={auth.setRegSecretKey}
-        regConfirmPassword={auth.regConfirmPassword}
-        setRegConfirmPassword={auth.setRegConfirmPassword}
-        showRegPassword={auth.showRegPassword}
-        setShowRegPassword={auth.setShowRegPassword}
-        showRegConfirmPassword={auth.showRegConfirmPassword}
-        setShowRegConfirmPassword={auth.setShowRegConfirmPassword}
-        showSecretKey={auth.showSecretKey}
-        setShowSecretKey={auth.setShowSecretKey}
-        regStudentId={auth.regStudentId}
-        setRegStudentId={auth.setRegStudentId}
-        regStudentDept={auth.regStudentDept}
-        setRegStudentDept={auth.setRegStudentDept}
-        regActualPassword={auth.regActualPassword}
-        setRegActualPassword={auth.setRegActualPassword}
-        handleLogin={auth.handleLogin}
-        handleRegister={auth.handleRegister}
-        resetAuthForm={auth.resetAuthForm}
-        validateRegisterField={auth.validateRegisterField}
-        cursorRef={cursorRef}
-        cursorVisible={cursorVisible}
-        cursorHovered={cursorHovered}
-      />
+      <>
+        <AuthScreen
+          theme={theme}
+          setTheme={setTheme}
+          authPortalMode={auth.authPortalMode}
+          setAuthPortalMode={auth.setAuthPortalMode}
+          formMode={auth.formMode}
+          setFormMode={auth.setFormMode}
+          authError={auth.authError}
+          registerErrors={auth.registerErrors}
+          isSubmitting={auth.isSubmitting}
+          loginEmail={auth.loginEmail}
+          setLoginEmail={auth.setLoginEmail}
+          loginPassword={auth.loginPassword}
+          setLoginPassword={auth.setLoginPassword}
+          loginStudentId={auth.loginStudentId}
+          setLoginStudentId={auth.setLoginStudentId}
+          showLoginPassword={auth.showLoginPassword}
+          setShowLoginPassword={auth.setShowLoginPassword}
+          regName={auth.regName}
+          setRegName={auth.setRegName}
+          regEmpId={auth.regEmpId}
+          setRegEmpId={auth.setRegEmpId}
+          regDept={auth.regDept}
+          setRegDept={auth.setRegDept}
+          regEmail={auth.regEmail}
+          setRegEmail={auth.setRegEmail}
+          regPassword={auth.regPassword}
+          setRegPassword={auth.setRegPassword}
+          regSecretKey={auth.regSecretKey}
+          setRegSecretKey={auth.setRegSecretKey}
+          regConfirmPassword={auth.regConfirmPassword}
+          setRegConfirmPassword={auth.setRegConfirmPassword}
+          showRegPassword={auth.showRegPassword}
+          setShowRegPassword={auth.setShowRegPassword}
+          showRegConfirmPassword={auth.showRegConfirmPassword}
+          setShowRegConfirmPassword={auth.setShowRegConfirmPassword}
+          showSecretKey={auth.showSecretKey}
+          setShowSecretKey={auth.setShowSecretKey}
+          regStudentId={auth.regStudentId}
+          setRegStudentId={auth.setRegStudentId}
+          regStudentDept={auth.regStudentDept}
+          setRegStudentDept={auth.setRegStudentDept}
+          regActualPassword={auth.regActualPassword}
+          setRegActualPassword={auth.setRegActualPassword}
+          handleLogin={auth.handleLogin}
+          handleRegister={auth.handleRegister}
+          resetAuthForm={auth.resetAuthForm}
+          validateRegisterField={auth.validateRegisterField}
+          cursorRef={cursorRef}
+          cursorVisible={cursorVisible}
+          cursorHovered={cursorHovered}
+        />
+        <ApiDebugger api={api} />
+      </>
     );
   }
 
@@ -389,6 +393,8 @@ function App() {
         ref={cursorRef} 
         className={`cursor-follower ${cursorVisible ? 'visible' : ''} ${cursorHovered ? 'hovered' : ''}`}
       />
+
+      <ApiDebugger api={api} />
     </div>
   );
 }
