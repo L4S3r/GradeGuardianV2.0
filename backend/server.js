@@ -44,15 +44,34 @@ const app = express();
 // Trust proxy (Vercel, Cloudflare, etc.)
 app.set('trust proxy', 1);
 
-// CORS — allowed origins for web portal and apps
-const rawOrigins     = process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:5173,http://localhost:8000';
-const allowedOrigins = rawOrigins.trim() === '*' ? '*' : rawOrigins.split(',').map(o => o.trim()).filter(Boolean);
+// CORS — dynamic origin validator supporting local development and deployed domains
+const rawOrigins = process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:5173,http://localhost:8000';
+
+const isOriginAllowed = (origin, callback) => {
+  if (!origin) return callback(null, true);
+  if (rawOrigins.trim() === '*') return callback(null, true);
+
+  const allowedList = rawOrigins.split(',').map(o => o.trim()).filter(Boolean);
+  if (allowedList.includes(origin)) return callback(null, true);
+
+  // Local development: allow all ports on localhost and 127.0.0.1
+  if (/^http:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/.test(origin)) {
+    return callback(null, true);
+  }
+
+  // Deployed environments: allow all *.vercel.app and *.l4s3r.site domains
+  if (/^https:\/\/[a-z0-9-]+(\.[a-z0-9-]+)*\.(vercel\.app|l4s3r\.site)$/i.test(origin)) {
+    return callback(null, true);
+  }
+
+  return callback(null, false);
+};
 
 const corsOptions = {
-  origin: allowedOrigins,
-  credentials: allowedOrigins !== '*',
+  origin: isOriginAllowed,
+  credentials: true,
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
+  allowedHeaders: ['Authorization', 'Content-Type', 'Accept', 'Origin', 'X-Requested-With'],
 };
 
 app.use(cors(corsOptions));
