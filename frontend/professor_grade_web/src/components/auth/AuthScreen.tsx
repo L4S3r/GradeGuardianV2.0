@@ -12,6 +12,7 @@ import {
   Eye,
   EyeSlash,
 } from '@phosphor-icons/react';
+import PasswordStrengthMeter from './PasswordStrengthMeter';
 
 interface AuthScreenProps {
   theme: 'light' | 'dark';
@@ -53,6 +54,8 @@ interface AuthScreenProps {
   setShowRegConfirmPassword: (v: boolean) => void;
   showSecretKey: boolean;
   setShowSecretKey: (v: boolean) => void;
+  showRegActualPassword: boolean;
+  setShowRegActualPassword: (v: boolean) => void;
   regStudentId: string;
   setRegStudentId: (v: string) => void;
   regStudentDept: string;
@@ -100,6 +103,8 @@ export default function AuthScreen({
   setShowRegPassword,
   showRegConfirmPassword,
   setShowRegConfirmPassword,
+  showRegActualPassword,
+  setShowRegActualPassword,
   regStudentId,
   setRegStudentId,
   regStudentDept,
@@ -352,14 +357,16 @@ export default function AuthScreen({
             </div>
 
             <div className="form-group">
-              <label htmlFor="regPassword">Password</label>
+              <label htmlFor="regPassword">
+                {isProfessorDetected ? 'Faculty Secret Key (Authorized)' : 'Password'}
+              </label>
               <div className="form-control-container">
-                <span className="form-control-icon"><Lock size={18} /></span>
+                <span className="form-control-icon">{isProfessorDetected ? <Key size={18} /> : <Lock size={18} />}</span>
                 <input
                   id="regPassword"
                   type={showRegPassword ? 'text' : 'password'}
                   className="form-control password-input"
-                  placeholder="Enter password"
+                  placeholder={isProfessorDetected ? "GG-FACULTY-..." : "Min 8 characters"}
                   value={regPassword}
                   onChange={e => {
                     setRegPassword(e.target.value);
@@ -382,6 +389,9 @@ export default function AuthScreen({
                 <span className="field-error-msg" style={{ color: 'var(--destructive)', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                   {registerErrors.regPassword}
                 </span>
+              )}
+              {!isProfessorDetected && regPassword && (
+                <PasswordStrengthMeter password={regPassword} />
               )}
             </div>
 
@@ -413,8 +423,8 @@ export default function AuthScreen({
                     <span className="form-control-icon"><Lock size={18} /></span>
                     <input
                       id="regActualPassword"
-                      type="password"
-                      className="form-control"
+                      type={showRegActualPassword ? 'text' : 'password'}
+                      className="form-control password-input"
                       placeholder="Min 8 characters"
                       value={regActualPassword}
                       onChange={e => {
@@ -423,12 +433,24 @@ export default function AuthScreen({
                       }}
                       onBlur={e => validateRegisterField('regActualPassword', e.target.value)}
                       required
+                      style={{ paddingRight: '44px' }}
                     />
+                    <button
+                      type="button"
+                      className="form-control-toggle"
+                      onClick={() => setShowRegActualPassword(!showRegActualPassword)}
+                      aria-label={showRegActualPassword ? "Hide password" : "Show password"}
+                    >
+                      {showRegActualPassword ? <EyeSlash size={18} /> : <Eye size={18} />}
+                    </button>
                   </div>
                   {registerErrors.regActualPassword && (
                     <span style={{ color: 'var(--destructive)', fontSize: '11px', marginTop: '4px', display: 'block', fontWeight: 600 }}>
                       {registerErrors.regActualPassword}
                     </span>
+                  )}
+                  {regActualPassword && (
+                    <PasswordStrengthMeter password={regActualPassword} />
                   )}
                 </div>
               </div>

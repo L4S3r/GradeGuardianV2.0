@@ -35,6 +35,7 @@ export function useAuth(api: ApiService) {
   const [showLoginPassword, setShowLoginPassword] = useState<boolean>(false);
   const [showRegPassword, setShowRegPassword] = useState<boolean>(false);
   const [showRegConfirmPassword, setShowRegConfirmPassword] = useState<boolean>(false);
+  const [showRegActualPassword, setShowRegActualPassword] = useState<boolean>(false);
   const [showSecretKey, setShowSecretKey] = useState<boolean>(false);
   const [regStudentId, setRegStudentId] = useState<string>('');
   const [regStudentDept, setRegStudentDept] = useState<string>('');
@@ -62,6 +63,7 @@ export function useAuth(api: ApiService) {
     setShowLoginPassword(false);
     setShowRegPassword(false);
     setShowRegConfirmPassword(false);
+    setShowRegActualPassword(false);
     setShowSecretKey(false);
   };
 
@@ -397,6 +399,8 @@ export function useAuth(api: ApiService) {
     setShowRegConfirmPassword,
     showSecretKey,
     setShowSecretKey,
+    showRegActualPassword,
+    setShowRegActualPassword,
     regStudentId,
     setRegStudentId,
     regStudentDept,
