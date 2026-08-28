@@ -44,37 +44,40 @@ const app = express();
 // Trust proxy (Vercel, Cloudflare, etc.)
 app.set('trust proxy', 1);
 
+// CORS — allowed origins for web portal and apps
+const rawOrigins     = process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:5173,http://localhost:8000';
+const allowedOrigins = rawOrigins.trim() === '*' ? '*' : rawOrigins.split(',').map(o => o.trim()).filter(Boolean);
+
+const corsOptions = {
+  origin: allowedOrigins,
+  credentials: allowedOrigins !== '*',
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
+};
+
+app.use(cors(corsOptions));
+app.options('*', cors(corsOptions));
+
 // Body parsing
 app.use(express.json({ limit: '10mb' }));
 
-// Helmet — security headers
+// Helmet — security headers (configured for cross-origin API)
 app.use(
   helmet({
-    contentSecurityPolicy: {
-      directives: { defaultSrc: ["'none'"], frameAncestors: ["'none'"] },
-    },
+    crossOriginResourcePolicy: { policy: 'cross-origin' },
+    crossOriginOpenerPolicy: false,
+    contentSecurityPolicy: false,
     hsts: { maxAge: 31536000, includeSubDomains: true },
   })
 );
-// Additional headers
+
+// Additional security headers
 app.use((_req, res, next) => {
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('X-Frame-Options', 'DENY');
   res.setHeader('Referrer-Policy', 'strict-origin-when-cross-origin');
   next();
 });
-
-// CORS
-// ALLOWED_ORIGINS must be set in .env. No hardcoded production URLs.
-const rawOrigins   = process.env.ALLOWED_ORIGINS || 'http://localhost:3000,http://localhost:5173,http://localhost:8000';
-const allowedOrigins = rawOrigins.trim() === '*' ? '*' : rawOrigins.split(',').map(o => o.trim()).filter(Boolean);
-
-app.use(cors({
-  origin: allowedOrigins,
-  credentials: allowedOrigins !== '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
-}));
 
 // Global rate limiter
 app.use(globalLimiter);

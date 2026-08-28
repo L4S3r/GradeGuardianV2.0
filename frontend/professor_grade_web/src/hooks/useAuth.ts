@@ -10,10 +10,12 @@ export function useAuth(api: ApiService) {
   const [student, setStudent] = useState<any | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [serverUrl] = useState<string>(() => {
-    return localStorage.getItem('gg_server_url') || import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const raw = import.meta.env.VITE_API_URL || localStorage.getItem('gg_server_url') || 'http://localhost:8000';
+    return api.normalizeUrl(raw);
   });
   const [prevServerUrl, setPrevServerUrl] = useState<string>(() => {
-    return localStorage.getItem('gg_server_url') || import.meta.env.VITE_API_URL || 'http://localhost:8000';
+    const raw = import.meta.env.VITE_API_URL || localStorage.getItem('gg_server_url') || 'http://localhost:8000';
+    return api.normalizeUrl(raw);
   });
 
   // Login / Register Form states
@@ -209,14 +211,14 @@ export function useAuth(api: ApiService) {
     } else if (field === 'regPassword') {
       if (!val) {
         error = 'Password or Faculty Key is required.';
-      } else if (val.length < 6) {
-        error = 'Must be at least 6 characters.';
+      } else if (!val.startsWith('GG-FACULTY-') && val.length < 8) {
+        error = 'Must be at least 8 characters.';
       }
     } else if (field === 'regActualPassword') {
       if (!val) {
         error = 'Password is required.';
-      } else if (val.length < 6) {
-        error = 'Password must be at least 6 characters.';
+      } else if (val.length < 8) {
+        error = 'Password must be at least 8 characters.';
       }
     } else if (field === 'regConfirmPassword') {
       if (val !== regPassword) {

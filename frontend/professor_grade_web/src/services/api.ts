@@ -72,8 +72,17 @@ export class ApiService {
     this.baseUrl = this.normalizeUrl(url);
   }
 
-  private normalizeUrl(url: string): string {
-    return url.endsWith('/') ? url.slice(0, -1) : url;
+  public normalizeUrl(url: string): string {
+    if (!url) return '';
+    let trimmed = url.trim();
+    if (!/^https?:\/\//i.test(trimmed)) {
+      if (trimmed.startsWith('localhost') || trimmed.startsWith('127.0.0.1')) {
+        trimmed = `http://${trimmed}`;
+      } else {
+        trimmed = `https://${trimmed}`;
+      }
+    }
+    return trimmed.endsWith('/') ? trimmed.slice(0, -1) : trimmed;
   }
 
   public async apiCall<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -97,30 +106,37 @@ export class ApiService {
       }
     }
 
+    const fullUrl = `${this.baseUrl}${endpoint}`;
     console.log(`[ApiService] calling ${endpoint}`, {
+      fullUrl,
       method: options.method || 'GET',
       hasToken: !!this.token,
       headers: { ...headers, Authorization: this.token ? `Bearer ${this.token.substring(0, 10)}...` : 'none' }
     });
 
-    const response = await fetch(`${this.baseUrl}${endpoint}`, {
-      ...options,
-      headers
-    });
+    try {
+      const response = await fetch(fullUrl, {
+        ...options,
+        headers
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      let message = 'An error occurred';
-      try {
-        const parsed = JSON.parse(errorText);
-        message = parsed.detail || message;
-      } catch (_) {
-        message = errorText || message;
+      if (!response.ok) {
+        const errorText = await response.text();
+        let message = 'An error occurred';
+        try {
+          const parsed = JSON.parse(errorText);
+          message = parsed.detail || message;
+        } catch (_) {
+          message = errorText || message;
+        }
+        throw new Error(message);
       }
-      throw new Error(message);
-    }
 
-    return response.json() as Promise<T>;
+      return response.json() as Promise<T>;
+    } catch (err: any) {
+      console.error(`[ApiService] request failed for ${fullUrl}:`, err);
+      throw err;
+    }
   }
 
   // ── Auth ──────────────────────────────────────────────────────────────────

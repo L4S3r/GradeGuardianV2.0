@@ -10,7 +10,7 @@
 
 **GradeGuardian V2.0** is an enterprise-grade academic grade management platform designed for professors, teaching assistants, and academic administrators. Built around the core principle of **tamper-proof academic integrity**, GradeGuardian uses **HMAC-SHA256 cryptographic hashing** to guarantee that student grade records cannot be altered, spoofed, or manipulated — even by database administrators or unauthorized system intruders.
 
-This repository contains the **Master Backend API (Express/Node.js)** and the **Professor/TA Management Portal (Flutter)**.
+This repository contains the **Master Backend API (Express/Node.js)**, the **Professor/TA Desktop & Mobile Portal (Flutter)**, and the **Professor Admin Web Portal (React / Vite)**.
 
 ### 🔗 Related Repositories & Ecosystem
 
@@ -64,24 +64,24 @@ Two separate HMAC keys are maintained for defense-in-depth:
 ## 🏗️ System Architecture & Tech Stack
 
 ```text
-┌─────────────────────────────────┐       ┌─────────────────────────────────┐
-│     Professor / TA App          │       │      Student Grade App          │
-│     (Flutter Cross-Platform)    │       │     (Flutter Mobile/Web)        │
-└────────────────┬────────────────┘       └────────────────┬────────────────┘
-                 │                                         │
-                 └──────────────────┬──────────────────────┘
-                                    │ HTTPS / REST API
-                                    ▼
-                      ┌───────────────────────────┐
-                      │  Express/Node.js Backend  │
-                      │    (Vercel Serverless)    │
-                      └─────────────┬─────────────┘
-                                    │
-                                    ▼
-                      ┌───────────────────────────┐
-                      │   Supabase PostgreSQL DB  │
-                      │   (Transaction Pooler)    │
-                      └───────────────────────────┘
+┌─────────────────────────┐   ┌─────────────────────────┐   ┌─────────────────────────┐
+│   Professor / TA App    │   │  Professor Web Portal   │   │    Student Grade App    │
+│ (Flutter Cross-Platform)│   │      (React / Vite)     │   │  (Flutter Mobile/Web)   │
+└────────────┬────────────┘   └────────────┬────────────┘   └────────────┬────────────┘
+             │                             │                             │
+             └─────────────────────────────┼─────────────────────────────┘
+                                           │ HTTPS / REST API
+                                           ▼
+                             ┌───────────────────────────┐
+                             │  Express/Node.js Backend  │
+                             │    (Vercel Serverless)    │
+                             └─────────────┬─────────────┘
+                                           │
+                                           ▼
+                             ┌───────────────────────────┐
+                             │   Supabase PostgreSQL DB  │
+                             │   (Transaction Pooler)    │
+                             └───────────────────────────┘
 ```
 
 ### Backend Stack
@@ -89,7 +89,7 @@ Two separate HMAC keys are maintained for defense-in-depth:
 | Layer | Technology |
 |---|---|
 | **Runtime** | Node.js 18+ |
-| **Framework** | Express 4.x |
+| **Framework** | Express 4.x (modularized in `config/`, `middleware/`, `routes/`, `utils/`) |
 | **Database Driver** | `pg` (node-postgres) |
 | **Authentication** | `jsonwebtoken` (JWT HS256) |
 | **Password Hashing** | `bcrypt` (configurable rounds via `BCRYPT_ROUNDS`) |
@@ -100,12 +100,48 @@ Two separate HMAC keys are maintained for defense-in-depth:
 
 ### Frontend Stack
 
+#### 1. Professor Web Portal (React / Vite)
+
+| Layer | Technology |
+|---|---|
+| **Framework** | React 18+ (Vite, TypeScript) |
+| **Styling** | Vanilla CSS (Glassmorphism, CSS Variables, Theme Tokens) |
+| **Linters** | Oxlint (Oxc), ESLint |
+| **API Client** | Axios |
+
+#### 2. Professor & Student App (Flutter)
+
 | Layer | Technology |
 |---|---|
 | **Framework** | Flutter 3.x |
 | **State Management** | Provider Pattern |
 | **Charts** | FL Chart |
 | **UI** | Shimmer, custom glassmorphism components |
+
+---
+
+## 📂 Project Structure
+
+```text
+GradeGuardianV2.0/
+├── backend/                       # Express Backend API
+│   ├── config/                    # DB connections, cryptographic keys, migrations
+│   ├── middleware/                # JWT auth, rate limits, input validations
+│   ├── routes/                    # Modularized API endpoints
+│   ├── utils/                     # HMAC hashing logic, CSV/PDF formatting, PDF parser
+│   ├── scripts/                   # DB purge & initialization utilities
+│   ├── server.js                  # Express entry point
+│   └── vercel.json                # Vercel deployment spec
+├── frontend/                      # Frontends
+│   ├── professor_grade_app/       # Flutter application (Mobile/Desktop/Web)
+│   └── professor_grade_web/       # React + TypeScript + Vite Administration Portal
+│       ├── src/
+│       │   ├── components/        # UI layout, modals, tabs, auth screens
+│       │   ├── hooks/             # Custom hooks (auth, cursor follower, grade mutations)
+│       │   ├── services/          # Axios API wrappers
+│       │   └── types/             # TS Interfaces
+└── graphify-out/                  # Knowledge graph representations of the codebase
+```
 
 ---
 
@@ -185,7 +221,7 @@ API is now live at `http://localhost:8000`.
 ### 3. Frontend Setup (Professor / TA App)
 
 ```bash
-cd frontend
+cd frontend/professor_grade_app
 
 # Install Flutter packages
 flutter pub get
@@ -193,6 +229,27 @@ flutter pub get
 # Run on your target platform
 flutter run
 ```
+
+### 4. Frontend Setup (Professor Web Portal)
+
+```bash
+cd frontend/professor_grade_web
+
+# Install web dependencies
+npm install
+
+# Set up local environment
+cp .env.example .env.local
+```
+
+Edit `frontend/professor_grade_web/.env.local` to point to the backend server (e.g., `VITE_API_URL=http://localhost:8000`).
+
+Start Vite local development server:
+```bash
+npm run dev
+```
+
+The portal is now running at `http://localhost:5173`.
 
 ---
 

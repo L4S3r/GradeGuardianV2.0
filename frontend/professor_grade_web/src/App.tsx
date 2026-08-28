@@ -32,7 +32,7 @@ import AuditLogsTab from './components/tabs/AuditLogsTab';
 
 import './App.css';
 
-const initialServerUrl = localStorage.getItem('gg_server_url') || import.meta.env.VITE_API_URL || 'http://localhost:8000';
+const initialServerUrl = import.meta.env.VITE_API_URL || localStorage.getItem('gg_server_url') || 'http://localhost:8000';
 const api = new ApiService(initialServerUrl);
 
 function App() {

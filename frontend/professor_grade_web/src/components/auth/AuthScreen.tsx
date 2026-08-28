@@ -415,7 +415,7 @@ export default function AuthScreen({
                       id="regActualPassword"
                       type="password"
                       className="form-control"
-                      placeholder="Min 6 characters"
+                      placeholder="Min 8 characters"
                       value={regActualPassword}
                       onChange={e => {
                         setRegActualPassword(e.target.value);
