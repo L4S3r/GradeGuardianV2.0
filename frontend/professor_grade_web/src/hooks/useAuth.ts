@@ -10,11 +10,11 @@ export function useAuth(api: ApiService) {
   const [student, setStudent] = useState<any | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [serverUrl] = useState<string>(() => {
-    const raw = import.meta.env.VITE_API_URL || localStorage.getItem('gg_server_url') || 'http://localhost:8000';
+    const raw = import.meta.env.VITE_API_URL || localStorage.getItem('gg_server_url') || 'https://gradeguardian-api.l4s3r.site';
     return api.normalizeUrl(raw);
   });
   const [prevServerUrl, setPrevServerUrl] = useState<string>(() => {
-    const raw = import.meta.env.VITE_API_URL || localStorage.getItem('gg_server_url') || 'http://localhost:8000';
+    const raw = import.meta.env.VITE_API_URL || localStorage.getItem('gg_server_url') || 'https://gradeguardian-api.l4s3r.site';
     return api.normalizeUrl(raw);
   });
 
